@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Plan Roulette",
+    "slug": "plan-roulette",
+    "scheme": "planroulette",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#FFF8EA",
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "bundleIdentifier": "com.example.planroulette",
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.example.planroulette",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow Plan Roulette to access your calendar so it can add final plans.",
+          "writeOnlyAccess": true,
+          "writeOnlyCalendarPermission": "Allow Plan Roulette to add final plans to your calendar."
+        }
+      ]
+    ]
+  }
+}
