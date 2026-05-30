@@ -136,7 +136,7 @@ export async function addPlanToCalendar(input: CalendarPlanInput): Promise<AddPl
 
   try {
     const Calendar = await import('expo-calendar');
-    const permission = await Calendar.requestCalendarPermissions(true);
+    const permission = await Calendar.requestCalendarPermissions();
 
     if (!isPermissionGranted(permission)) {
       return {

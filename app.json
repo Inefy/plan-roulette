@@ -39,9 +39,7 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "Allow Plan Roulette to access your calendar so it can add final plans.",
-          "writeOnlyAccess": true,
-          "writeOnlyCalendarPermission": "Allow Plan Roulette to add final plans to your calendar."
+          "calendarPermission": "Allow Plan Roulette to access your calendar so it can add final plans."
         }
       ]
     ]
