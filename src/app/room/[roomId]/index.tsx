@@ -1,7 +1,7 @@
 // src/app/room/[roomId]/index.tsx
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Share, StyleSheet, View } from 'react-native';
 
 import { Avatar, Button, Card, Chip, EmptyState, ErrorState, ProgressBar, Screen, SkeletonBlock, SkeletonText, Text } from '../../../components';
@@ -209,6 +209,10 @@ export default function RoomRoute() {
   const params = useLocalSearchParams<RoomRouteParams>();
   const roomId = useMemo(() => getParamValue(params.roomId)?.trim(), [params.roomId]);
   const { isLoading: isAuthLoading, session } = useAuth();
+  const userId = session?.user.id;
+  const queuedRefreshRef = useRef(false);
+  const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const refreshInFlightRef = useRef(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>();
   const [inviteAction, setInviteAction] = useState<'copy' | 'share' | undefined>();
   const [isClosingVoting, setIsClosingVoting] = useState(false);
@@ -219,7 +223,7 @@ export default function RoomRoute() {
 
   const refreshLobby = useCallback(
     async (isBackgroundRefresh = false) => {
-      if (!roomId || !session?.user) {
+      if (!roomId || !userId) {
         setLobbyError({
           message: roomId ? 'Join this room before opening the lobby.' : 'The room link is missing a room id.',
           retryable: false,
@@ -229,70 +233,91 @@ export default function RoomRoute() {
         return;
       }
 
-      if (isBackgroundRefresh) {
-        setIsRefreshing(true);
-      } else {
-        setIsInitialLoading(true);
+      if (refreshInFlightRef.current) {
+        queuedRefreshRef.current = true;
+        return;
       }
+
+      refreshInFlightRef.current = true;
+      let nextIsBackgroundRefresh = isBackgroundRefresh;
 
       try {
-        const { data: roomData, error: roomError } = await supabase
-          .from('plan_rooms')
-          .select('id, title, status, invite_token, itinerary_id, updated_at, budget_tier, category_preferences, decision_mode')
-          .eq('id', roomId)
-          .single();
+        do {
+          queuedRefreshRef.current = false;
 
-        if (roomError) {
-          throw new Error(roomError.message);
-        }
+          if (nextIsBackgroundRefresh) {
+            setIsRefreshing(true);
+          } else {
+            setIsInitialLoading(true);
+          }
 
-        const room = roomData as unknown as RoomRow;
+          try {
+            const [
+              { data: roomData, error: roomError },
+              { data: participantData, error: participantError },
+              { count: optionCount, error: optionError },
+            ] = await Promise.all([
+              supabase
+                .from('plan_rooms')
+                .select('id, title, status, invite_token, itinerary_id, updated_at, budget_tier, category_preferences, decision_mode')
+                .eq('id', roomId)
+                .single(),
+              supabase
+                .from('plan_participants')
+                .select('id, user_id, display_name, avatar_url, role, is_ready, joined_at')
+                .eq('room_id', roomId)
+                .order('joined_at', { ascending: true }),
+              supabase
+                .from('plan_options')
+                .select('id', { count: 'exact', head: true })
+                .eq('room_id', roomId)
+                .eq('is_active', true),
+            ]);
 
-        const { data: participantData, error: participantError } = await supabase
-          .from('plan_participants')
-          .select('id, user_id, display_name, avatar_url, role, is_ready, joined_at')
-          .eq('room_id', roomId)
-          .order('joined_at', { ascending: true });
+            if (roomError) {
+              throw new Error(roomError.message);
+            }
 
-        if (participantError) {
-          throw new Error(participantError.message);
-        }
+            if (participantError) {
+              throw new Error(participantError.message);
+            }
 
-        const { count: optionCount, error: optionError } = await supabase
-          .from('plan_options')
-          .select('id', { count: 'exact', head: true })
-          .eq('room_id', roomId)
-          .eq('is_active', true);
+            if (optionError) {
+              throw new Error(optionError.message);
+            }
 
-        if (optionError) {
-          throw new Error(optionError.message);
-        }
+            const room = roomData as unknown as RoomRow;
+            const participants = (participantData ?? []) as ParticipantRow[];
+            const currentParticipant = participants.find((participant) => participant.user_id === userId);
 
-        const participants = (participantData ?? []) as ParticipantRow[];
-        const currentParticipant = participants.find((participant) => participant.user_id === session.user.id);
+            setLobbyData({
+              currentParticipant,
+              optionCount: optionCount ?? 0,
+              participants,
+              room,
+            });
+            void rememberRecentRoom({
+              id: room.id,
+              itineraryId: room.itinerary_id,
+              status: room.status,
+              title: room.title,
+              updatedAt: room.updated_at,
+            });
+            setLobbyError(undefined);
+          } catch (error) {
+            setLobbyError(createLobbyError(error instanceof Error ? error.message : 'Network error.'));
+          } finally {
+            setIsInitialLoading(false);
+            setIsRefreshing(false);
+          }
 
-        setLobbyData({
-          currentParticipant,
-          optionCount: optionCount ?? 0,
-          participants,
-          room,
-        });
-        void rememberRecentRoom({
-          id: room.id,
-          itineraryId: room.itinerary_id,
-          status: room.status,
-          title: room.title,
-          updatedAt: room.updated_at,
-        });
-        setLobbyError(undefined);
-      } catch (error) {
-        setLobbyError(createLobbyError(error instanceof Error ? error.message : 'Network error.'));
+          nextIsBackgroundRefresh = true;
+        } while (queuedRefreshRef.current);
       } finally {
-        setIsInitialLoading(false);
-        setIsRefreshing(false);
+        refreshInFlightRef.current = false;
       }
     },
-    [roomId, session],
+    [roomId, userId],
   );
 
   useEffect(() => {
@@ -304,21 +329,26 @@ export default function RoomRoute() {
   }, [isAuthLoading, refreshLobby]);
 
   useEffect(() => {
-    if (!session?.user || !roomId) {
+    if (!userId || !roomId) {
       return undefined;
+    }
+
+    function scheduleRefresh() {
+      if (refreshDebounceRef.current) {
+        clearTimeout(refreshDebounceRef.current);
+      }
+
+      refreshDebounceRef.current = setTimeout(() => {
+        refreshDebounceRef.current = undefined;
+        void refreshLobby(true);
+      }, 250);
     }
 
     const channel = supabase
       .channel(`room-lobby:${roomId}`)
-      .on('postgres_changes', { event: '*', filter: `id=eq.${roomId}`, schema: 'public', table: 'plan_rooms' }, () => {
-        void refreshLobby(true);
-      })
-      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_participants' }, () => {
-        void refreshLobby(true);
-      })
-      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_options' }, () => {
-        void refreshLobby(true);
-      })
+      .on('postgres_changes', { event: '*', filter: `id=eq.${roomId}`, schema: 'public', table: 'plan_rooms' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_participants' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_options' }, scheduleRefresh)
       .subscribe();
 
     const intervalId = setInterval(() => {
@@ -326,10 +356,15 @@ export default function RoomRoute() {
     }, 60000);
 
     return () => {
+      if (refreshDebounceRef.current) {
+        clearTimeout(refreshDebounceRef.current);
+        refreshDebounceRef.current = undefined;
+      }
+
       clearInterval(intervalId);
       void supabase.removeChannel(channel);
     };
-  }, [refreshLobby, roomId, session]);
+  }, [refreshLobby, roomId, userId]);
 
   async function handleShareInvite() {
     if (!lobbyData) {

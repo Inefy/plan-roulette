@@ -270,62 +270,68 @@ export default function RoomItineraryRoute() {
     setIsLoadingItinerary(true);
 
     try {
-      const { data: roomData, error: roomError } = await supabase
-        .from('plan_rooms')
-        .select('id, title, status, itinerary_id, updated_at, budget_tier, category_preferences, decision_mode')
-        .eq('id', roomId)
-        .single();
+      const [
+        { data: roomData, error: roomError },
+        { data: itineraryRows, error: itineraryFetchError },
+      ] = await Promise.all([
+        supabase
+          .from('plan_rooms')
+          .select('id, title, status, itinerary_id, updated_at, budget_tier, category_preferences, decision_mode')
+          .eq('id', roomId)
+          .single(),
+        supabase
+          .from('itineraries')
+          .select('id, room_id, winning_option_id, title, summary, meeting_time, location_text, estimated_budget, estimated_duration, steps, backup_plan, share_text')
+          .eq('room_id', roomId)
+          .limit(1),
+      ]);
 
       if (roomError) {
         throw new Error(roomError.message);
       }
 
-      const room = roomData as unknown as RoomRow;
-
-      const { data: itineraryRows, error: itineraryFetchError } = await supabase
-        .from('itineraries')
-        .select('id, room_id, winning_option_id, title, summary, meeting_time, location_text, estimated_budget, estimated_duration, steps, backup_plan, share_text')
-        .eq('room_id', roomId)
-        .limit(1);
-
       if (itineraryFetchError) {
         throw new Error(itineraryFetchError.message);
       }
 
+      const room = roomData as unknown as RoomRow;
       const itinerary = (itineraryRows?.[0] as unknown as ItineraryRow | undefined) ?? undefined;
 
       if (!itinerary) {
         throw new Error('Itinerary not ready.');
       }
 
-      const { data: participantData, error: participantError } = await supabase
-        .from('plan_participants')
-        .select('id, user_id, display_name, avatar_url, role, is_ready, joined_at')
-        .eq('room_id', roomId)
-        .order('joined_at', { ascending: true });
+      const voteFetch = itinerary.winning_option_id
+        ? supabase
+            .from('plan_votes')
+            .select('participant_id, value')
+            .eq('room_id', roomId)
+            .eq('option_id', itinerary.winning_option_id)
+            .in('value', ['yes', 'maybe'])
+        : Promise.resolve({ data: [], error: null });
+
+      const [
+        { data: participantData, error: participantError },
+        { data: voteData, error: voteError },
+      ] = await Promise.all([
+        supabase
+          .from('plan_participants')
+          .select('id, user_id, display_name, avatar_url, role, is_ready, joined_at')
+          .eq('room_id', roomId)
+          .order('joined_at', { ascending: true }),
+        voteFetch,
+      ]);
 
       if (participantError) {
         throw new Error(participantError.message);
       }
 
-      let votes: VoteRow[] = [];
-
-      if (itinerary.winning_option_id) {
-        const { data: voteData, error: voteError } = await supabase
-          .from('plan_votes')
-          .select('participant_id, value')
-          .eq('room_id', roomId)
-          .eq('option_id', itinerary.winning_option_id)
-          .in('value', ['yes', 'maybe']);
-
-        if (voteError) {
-          throw new Error(voteError.message);
-        }
-
-        votes = (voteData ?? []) as VoteRow[];
+      if (voteError) {
+        throw new Error(voteError.message);
       }
 
       const participants = (participantData ?? []) as ParticipantRow[];
+      const votes = (voteData ?? []) as VoteRow[];
       const supportGroups = buildSupportGroups(participants, votes);
 
       setItineraryData({

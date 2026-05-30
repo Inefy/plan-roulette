@@ -69,12 +69,22 @@ export default function CreateRoute() {
 
   return (
     <Screen contentContainerStyle={styles.screen} padded={false} scroll>
-      <View style={styles.header}>
-        <Text variant="title">Create Plan</Text>
-        <Text color="textSecondary">Set the shape of the hangout before the wheel starts spinning.</Text>
-      </View>
+      <Card style={styles.heroCard} variant="elevated">
+        <Chip title="New plan" tone="red" />
+        <View style={styles.header}>
+          <Text variant="display">Create Plan</Text>
+          <Text color="textSecondary">Set the shape of the hangout before the wheel starts spinning.</Text>
+        </View>
+      </Card>
 
-      <Card style={styles.formCard} variant="warm">
+      <Card style={styles.formCard} variant="elevated">
+        <View style={styles.sectionHeader}>
+          <Text variant="subtitle">Essentials</Text>
+          <Text color="textSecondary" variant="caption">
+            Room basics
+          </Text>
+        </View>
+
         <Field label="Title">
           <TextInput
             accessibilityLabel="Plan title"
@@ -110,6 +120,13 @@ export default function CreateRoute() {
               value={draft.endsAt}
             />
           </Field>
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <Text variant="subtitle">Plan Shape</Text>
+          <Text color="textSecondary" variant="caption">
+            What should match
+          </Text>
         </View>
 
         <Field label="Budget">
@@ -171,6 +188,13 @@ export default function CreateRoute() {
           />
         </Field>
 
+        <View style={styles.sectionHeader}>
+          <Text variant="subtitle">Comfort</Text>
+          <Text color="textSecondary" variant="caption">
+            Optional filter
+          </Text>
+        </View>
+
         <View style={styles.switchRow}>
           <View style={styles.switchText}>
             <Text variant="label">Allow age-sensitive categories</Text>
@@ -228,8 +252,11 @@ const styles = StyleSheet.create({
   header: {
     gap: theme.spacing.sm,
   },
+  heroCard: {
+    gap: theme.spacing.lg,
+  },
   input: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.surfaceRaised,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.sm,
     borderWidth: 1,
@@ -256,12 +283,26 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xl,
     padding: theme.spacing.xl,
   },
+  sectionHeader: {
+    alignItems: 'center',
+    borderBottomColor: theme.colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    justifyContent: 'space-between',
+    paddingBottom: theme.spacing.sm,
+  },
   switchRow: {
     alignItems: 'center',
+    backgroundColor: theme.colors.surfaceSubtle,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
     flexDirection: 'row',
     gap: theme.spacing.md,
     justifyContent: 'space-between',
     minHeight: 52,
+    padding: theme.spacing.md,
   },
   switchText: {
     flex: 1,

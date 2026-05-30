@@ -64,6 +64,18 @@ function getStatusTone(status: RoomStatus) {
   return 'orange';
 }
 
+function getStatusRailColor(status: RoomStatus) {
+  if (status === 'itinerary_ready' || status === 'completed') {
+    return theme.colors.goGreen;
+  }
+
+  if (status === 'cancelled' || status === 'expired') {
+    return theme.colors.nopeCoral;
+  }
+
+  return theme.colors.electricTangerine;
+}
+
 function formatDate(value: string) {
   const date = new Date(value);
 
@@ -212,15 +224,18 @@ export default function HistoryRoute() {
 
   return (
     <Screen contentContainerStyle={styles.screen} padded={false} scroll>
-      <View style={styles.header}>
+      <Card style={styles.heroCard} variant="elevated">
+        <View style={styles.heroTopRow}>
+          <Chip title={accountState === 'signed_in' ? 'Account history' : 'Local history'} tone={accountState === 'signed_in' ? 'green' : 'yellow'} />
+          <Button onPress={loadHistory} title="Refresh" variant="outline" />
+        </View>
         <View style={styles.titleGroup}>
-          <Text variant="title">History</Text>
+          <Text variant="display">History</Text>
           <Text color="textSecondary">
             {accountState === 'signed_in' ? 'Recent closed rooms from your account.' : 'Recent guest rooms saved on this device.'}
           </Text>
         </View>
-        <Button onPress={loadHistory} title="Refresh" variant="outline" />
-      </View>
+      </Card>
 
       {historyError ? <ErrorState message={historyError.message} onRetry={loadHistory} retryLabel="Retry" title={historyError.title} /> : null}
 
@@ -230,33 +245,45 @@ export default function HistoryRoute() {
           title="No history"
         />
       ) : (
-        <View style={styles.roomList}>
-          {historyItems.map((room) => (
-            <Card
-              accessibilityLabel={`Open history for ${room.title}`}
-              key={room.id}
-              onPress={() => router.push(getRoomHistoryDestination(room))}
-              style={styles.roomCard}
-            >
-              <View style={styles.roomHeader}>
-                <View style={styles.roomTitleGroup}>
-                  <Text variant="bodyStrong">{room.title}</Text>
-                  <Text color="textSecondary" variant="caption">
-                    {room.savedAt ? `Saved ${formatDate(room.savedAt)}` : `Closed ${formatDate(room.lastTouchedAt)}`}
-                  </Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text variant="subtitle">Closed Plans</Text>
+            <Text color="textSecondary" variant="caption">
+              {historyItems.length} saved
+            </Text>
+          </View>
+          <View style={styles.roomList}>
+            {historyItems.map((room) => (
+              <Card
+                accessibilityLabel={`Open history for ${room.title}`}
+                key={room.id}
+                onPress={() => router.push(getRoomHistoryDestination(room))}
+                style={styles.roomCard}
+                variant="elevated"
+              >
+                <View style={[styles.statusRail, { backgroundColor: getStatusRailColor(room.status) }]} />
+                <View style={styles.roomContent}>
+                  <View style={styles.roomHeader}>
+                    <View style={styles.roomTitleGroup}>
+                      <Text variant="bodyStrong">{room.title}</Text>
+                      <Text color="textSecondary" variant="caption">
+                        {room.savedAt ? `Saved ${formatDate(room.savedAt)}` : `Closed ${formatDate(room.lastTouchedAt)}`}
+                      </Text>
+                    </View>
+                    <Chip title={toLabel(room.status)} tone={getStatusTone(room.status)} />
+                  </View>
+                  <View style={styles.roomFooter}>
+                    <Text color="textSecondary" variant="caption">
+                      {room.itineraryId || room.status === 'itinerary_ready' || room.status === 'completed' ? 'Opens itinerary' : 'Opens result'}
+                    </Text>
+                    <Text color="textSecondary" variant="caption">
+                      Open
+                    </Text>
+                  </View>
                 </View>
-                <Chip title={toLabel(room.status)} tone={getStatusTone(room.status)} />
-              </View>
-              <View style={styles.roomFooter}>
-                <Text color="textSecondary" variant="caption">
-                  {room.itineraryId || room.status === 'itinerary_ready' || room.status === 'completed' ? 'Opens itinerary' : 'Opens result'}
-                </Text>
-                <Text color="textSecondary" variant="caption">
-                  Tap to open
-                </Text>
-              </View>
-            </Card>
-          ))}
+              </Card>
+            ))}
+          </View>
         </View>
       )}
     </Screen>
@@ -264,14 +291,23 @@ export default function HistoryRoute() {
 }
 
 const styles = StyleSheet.create({
-  header: {
+  heroCard: {
+    gap: theme.spacing.xl,
+  },
+  heroTopRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',
     gap: theme.spacing.md,
     justifyContent: 'space-between',
   },
-  roomCard: {
+  roomContent: {
+    flex: 1,
     gap: theme.spacing.md,
+  },
+  roomCard: {
+    flexDirection: 'row',
+    gap: theme.spacing.lg,
+    overflow: 'hidden',
   },
   roomFooter: {
     alignItems: 'center',
@@ -295,6 +331,18 @@ const styles = StyleSheet.create({
   screen: {
     gap: theme.spacing.xl,
     padding: theme.spacing.xl,
+  },
+  section: {
+    gap: theme.spacing.md,
+  },
+  sectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statusRail: {
+    borderRadius: theme.radius.pill,
+    width: 5,
   },
   titleGroup: {
     flex: 1,

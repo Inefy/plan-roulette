@@ -42,7 +42,7 @@ const toneColors: Record<ChipTone, ChipColorSet> = {
     label: 'afterpartyNavy',
   },
   neutral: {
-    background: 'surface',
+    background: 'surfaceSubtle',
     border: 'border',
     label: 'textPrimary',
   },
@@ -128,10 +128,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: theme.spacing.xs,
-    minHeight: 44,
-    minWidth: 44,
+    minHeight: 36,
+    minWidth: 36,
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
   },
   disabled: {
     opacity: 0.5,

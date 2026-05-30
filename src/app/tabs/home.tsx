@@ -58,6 +58,18 @@ function getStatusTone(status: RoomStatus) {
   return 'blue';
 }
 
+function getStatusRailColor(status: RoomStatus) {
+  if (status === 'voting') {
+    return theme.colors.goGreen;
+  }
+
+  if (status === 'deciding') {
+    return theme.colors.electricTangerine;
+  }
+
+  return theme.colors.poolBlue;
+}
+
 function formatRelativeDate(value: string) {
   const timestamp = Date.parse(value);
 
@@ -125,19 +137,25 @@ export default function HomeRoute() {
     setIsLoadingRooms(true);
 
     try {
-      const localActiveRooms = (await getRecentRooms()).filter((room) => isActiveRoomStatus(room.status)).map(toLocalActiveRoom);
-
       if (!session?.user) {
+        const localActiveRooms = (await getRecentRooms()).filter((room) => isActiveRoomStatus(room.status)).map(toLocalActiveRoom);
+
         setActiveRooms(sortActiveRooms(localActiveRooms));
         return;
       }
 
-      const { data: participantData, error: participantError } = await supabase
-        .from('plan_participants')
-        .select('room_id, role, joined_at')
-        .eq('user_id', session.user.id)
-        .order('joined_at', { ascending: false })
-        .limit(40);
+      const [
+        localActiveRooms,
+        { data: participantData, error: participantError },
+      ] = await Promise.all([
+        getRecentRooms().then((rooms) => rooms.filter((room) => isActiveRoomStatus(room.status)).map(toLocalActiveRoom)),
+        supabase
+          .from('plan_participants')
+          .select('room_id, role, joined_at')
+          .eq('user_id', session.user.id)
+          .order('joined_at', { ascending: false })
+          .limit(40),
+      ]);
 
       if (participantError) {
         throw new Error(participantError.message);
@@ -163,8 +181,9 @@ export default function HomeRoute() {
 
       const participantsByRoomId = new Map(participantRows.map((participant) => [participant.room_id, participant]));
       const serverRooms = ((roomData ?? []) as RoomRow[]).map((room) => toActiveRoomItem(room, participantsByRoomId.get(room.id)));
+      const serverRoomIds = new Set(serverRooms.map((room) => room.id));
       const mergedRooms = isGuest
-        ? [...serverRooms, ...localActiveRooms.filter((localRoom) => !serverRooms.some((serverRoom) => serverRoom.id === localRoom.id))]
+        ? [...serverRooms, ...localActiveRooms.filter((localRoom) => !serverRoomIds.has(localRoom.id))]
         : serverRooms;
 
       setActiveRooms(sortActiveRooms(mergedRooms));
@@ -194,15 +213,39 @@ export default function HomeRoute() {
 
   return (
     <Screen contentContainerStyle={styles.screen} padded={false} scroll>
-      <View style={styles.header}>
-        <View style={styles.titleGroup}>
-          <Text variant="title">Home</Text>
+      <Card style={styles.heroCard} variant="elevated">
+        <View style={styles.heroTopRow}>
+          <Chip title={accountState === 'guest' ? 'Guest workspace' : 'Signed in'} tone={accountState === 'guest' ? 'yellow' : 'green'} />
+          <Button onPress={() => router.push('/create')} title="Create" variant="secondary" />
+        </View>
+        <View style={styles.heroCopy}>
+          <Text variant="display">Plan Roulette</Text>
           <Text color="textSecondary">
-            {accountState === 'guest' ? 'Guest rooms stay easy to re-open on this device.' : 'Jump back into plans that are still in progress.'}
+            {accountState === 'guest'
+              ? 'Re-open guest rooms on this device and keep the next decision moving.'
+              : 'Jump back into live plans and close the loop with your group.'}
           </Text>
         </View>
-        <Button onPress={() => router.push('/create')} title="Create" variant="secondary" />
-      </View>
+        <View style={styles.heroMetrics}>
+          <View style={styles.metricItem}>
+            <Text style={styles.metricValue} variant="title">
+              {activeRooms.length}
+            </Text>
+            <Text color="textSecondary" variant="caption">
+              active
+            </Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricItem}>
+            <Text style={styles.metricValue} variant="title">
+              {isGuest ? 'Local' : 'Cloud'}
+            </Text>
+            <Text color="textSecondary" variant="caption">
+              sync
+            </Text>
+          </View>
+        </View>
+      </Card>
 
       {homeError ? <ErrorState message={homeError.message} onRetry={loadActiveRooms} retryLabel="Retry" title={homeError.title} /> : null}
 
@@ -213,28 +256,45 @@ export default function HomeRoute() {
           title="No active plans"
         />
       ) : (
-        <View style={styles.roomList}>
-          {activeRooms.map((room) => (
-            <Card accessibilityLabel={`Open ${room.title}`} key={room.id} onPress={() => router.push(`/room/${room.id}`)} style={styles.roomCard}>
-              <View style={styles.roomHeader}>
-                <View style={styles.roomTitleGroup}>
-                  <Text variant="bodyStrong">{room.title}</Text>
-                  <Text color="textSecondary" variant="caption">
-                    {formatRelativeDate(room.lastTouchedAt)}
-                  </Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text variant="subtitle">Active Plans</Text>
+            <Text color="textSecondary" variant="caption">
+              {activeRooms.length} open
+            </Text>
+          </View>
+          <View style={styles.roomList}>
+            {activeRooms.map((room) => (
+              <Card
+                accessibilityLabel={`Open ${room.title}`}
+                key={room.id}
+                onPress={() => router.push(`/room/${room.id}`)}
+                style={styles.roomCard}
+                variant="elevated"
+              >
+                <View style={[styles.statusRail, { backgroundColor: getStatusRailColor(room.status) }]} />
+                <View style={styles.roomContent}>
+                  <View style={styles.roomHeader}>
+                    <View style={styles.roomTitleGroup}>
+                      <Text variant="bodyStrong">{room.title}</Text>
+                      <Text color="textSecondary" variant="caption">
+                        {formatRelativeDate(room.lastTouchedAt)}
+                      </Text>
+                    </View>
+                    <Chip title={toLabel(room.status)} tone={getStatusTone(room.status)} />
+                  </View>
+                  <View style={styles.roomFooter}>
+                    <Text color="textSecondary" variant="caption">
+                      {room.role ? `You are ${toLabel(room.role)}` : 'Recent guest room'}
+                    </Text>
+                    <Text color="textSecondary" variant="caption">
+                      Open
+                    </Text>
+                  </View>
                 </View>
-                <Chip title={toLabel(room.status)} tone={getStatusTone(room.status)} />
-              </View>
-              <View style={styles.roomFooter}>
-                <Text color="textSecondary" variant="caption">
-                  {room.role ? `You are ${toLabel(room.role)}` : 'Recent guest room'}
-                </Text>
-                <Text color="textSecondary" variant="caption">
-                  Tap to open
-                </Text>
-              </View>
-            </Card>
-          ))}
+              </Card>
+            ))}
+          </View>
         </View>
       )}
     </Screen>
@@ -242,14 +302,47 @@ export default function HomeRoute() {
 }
 
 const styles = StyleSheet.create({
-  header: {
+  heroCard: {
+    gap: theme.spacing.xl,
+  },
+  heroCopy: {
+    gap: theme.spacing.sm,
+  },
+  heroMetrics: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceSubtle,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    flexDirection: 'row',
+    padding: theme.spacing.md,
+  },
+  heroTopRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',
     gap: theme.spacing.md,
     justifyContent: 'space-between',
   },
-  roomCard: {
+  metricDivider: {
+    alignSelf: 'stretch',
+    backgroundColor: theme.colors.border,
+    width: 1,
+  },
+  metricItem: {
+    flex: 1,
+    gap: theme.spacing.xs,
+  },
+  metricValue: {
+    fontVariant: ['tabular-nums'],
+  },
+  roomContent: {
+    flex: 1,
     gap: theme.spacing.md,
+  },
+  roomCard: {
+    flexDirection: 'row',
+    gap: theme.spacing.lg,
+    overflow: 'hidden',
   },
   roomFooter: {
     alignItems: 'center',
@@ -274,8 +367,16 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xl,
     padding: theme.spacing.xl,
   },
-  titleGroup: {
-    flex: 1,
-    gap: theme.spacing.xs,
+  section: {
+    gap: theme.spacing.md,
+  },
+  sectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statusRail: {
+    borderRadius: theme.radius.pill,
+    width: 5,
   },
 });

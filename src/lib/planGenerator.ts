@@ -373,20 +373,6 @@ function collectScore(template: PlanTemplateDeckItem, constraints: PlanGenerator
   };
 }
 
-function dedupeByTemplateId(items: readonly ScoredTemplate[]) {
-  const seen = new Set<string>();
-  const deduped: ScoredTemplate[] = [];
-
-  for (const item of items) {
-    if (!seen.has(item.template.id)) {
-      seen.add(item.template.id);
-      deduped.push(item);
-    }
-  }
-
-  return deduped;
-}
-
 function getResultBounds(options: PlanGeneratorOptions | undefined) {
   const maxResults = options?.maxResults ?? defaultMaxResults;
   const minResults = Math.min(options?.minResults ?? defaultMinResults, maxResults);
@@ -432,23 +418,26 @@ export function generatePlanOptions(
 ): GeneratedPlanOption[] {
   const { count, minResults } = getResultBounds(options);
   const random = options?.random ?? Math.random;
-  const collected: ScoredTemplate[] = [];
+  const hardFilteredTemplates = templates.filter((template) => passesHardFilters(template, constraints));
+  const collectedByTemplateId = new Map<string, ScoredTemplate>();
 
   for (let fallbackLevel = 0; fallbackLevel < fallbackStages.length; fallbackLevel += 1) {
     const relaxed = fallbackStages[fallbackLevel];
-    const stageMatches = templates
-      .filter((template) => passesHardFilters(template, constraints))
-      .filter((template) => passesSoftFilters(template, constraints, relaxed))
-      .map((template) => collectScore(template, constraints, fallbackLevel, relaxed));
 
-    collected.push(...stageMatches);
+    for (const template of hardFilteredTemplates) {
+      if (collectedByTemplateId.has(template.id) || !passesSoftFilters(template, constraints, relaxed)) {
+        continue;
+      }
 
-    if (dedupeByTemplateId(collected).length >= minResults) {
+      collectedByTemplateId.set(template.id, collectScore(template, constraints, fallbackLevel, relaxed));
+    }
+
+    if (collectedByTemplateId.size >= minResults) {
       break;
     }
   }
 
-  const ranked = dedupeByTemplateId(collected).sort((left, right) => {
+  const ranked = [...collectedByTemplateId.values()].sort((left, right) => {
     if (right.score !== left.score) {
       return right.score - left.score;
     }

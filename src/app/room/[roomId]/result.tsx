@@ -362,17 +362,36 @@ export default function RoomResultRoute() {
     setShowResult(false);
 
     try {
-      const { data: roomData, error: roomError } = await supabase
-        .from('plan_rooms')
-        .select('id, title, status, itinerary_id, updated_at')
-        .eq('id', roomId)
-        .single();
+      const [
+        { data: roomData, error: roomError },
+        { data: resultRows, error: resultFetchError },
+      ] = await Promise.all([
+        supabase
+          .from('plan_rooms')
+          .select('id, title, status, itinerary_id, updated_at')
+          .eq('id', roomId)
+          .single(),
+        supabase
+          .from('plan_results')
+          .select('id, room_id, decision_mode, outcome, winning_option_id, tied_option_ids, vote_counts_by_option_id, score_breakdown, no_consensus, reason, decided_at')
+          .eq('room_id', roomId)
+          .limit(1),
+      ]);
 
       if (roomError) {
         throw new Error(roomError.message);
       }
 
+      if (resultFetchError) {
+        throw new Error(resultFetchError.message);
+      }
+
       const room = roomData as unknown as RoomRow;
+      const result = (resultRows?.[0] as unknown as ResultRow | undefined) ?? undefined;
+
+      if (!result) {
+        throw new Error('Result not found.');
+      }
 
       void rememberRecentRoom({
         id: room.id,
@@ -382,72 +401,58 @@ export default function RoomResultRoute() {
         updatedAt: room.updated_at,
       });
 
-      const { data: resultRows, error: resultFetchError } = await supabase
-        .from('plan_results')
-        .select('id, room_id, decision_mode, outcome, winning_option_id, tied_option_ids, vote_counts_by_option_id, score_breakdown, no_consensus, reason, decided_at')
-        .eq('room_id', roomId)
-        .limit(1);
-
-      if (resultFetchError) {
-        throw new Error(resultFetchError.message);
-      }
-
-      const result = (resultRows?.[0] as unknown as ResultRow | undefined) ?? undefined;
-
-      if (!result) {
-        throw new Error('Result not found.');
-      }
-
-      let topOptions: OptionRow[] = [];
-      let winningOption: OptionRow | undefined;
       const topOptionIds = getTopOptionIds(result);
       const optionIdsToFetch = [...new Set([result.winning_option_id, ...topOptionIds].filter((optionId): optionId is string => Boolean(optionId)))];
+      const optionFetch = optionIdsToFetch.length > 0
+        ? supabase
+            .from('plan_options')
+            .select('id, title, description, category, share_summary')
+            .in('id', optionIdsToFetch)
+        : Promise.resolve({ data: [], error: null });
 
-      if (optionIdsToFetch.length > 0) {
-        const { data: optionData, error: optionError } = await supabase
-          .from('plan_options')
-          .select('id, title, description, category, share_summary')
-          .in('id', optionIdsToFetch);
+      const [
+        { data: optionData, error: optionError },
+        { data: itineraryRows, error: itineraryError },
+        { count: participantCount, error: participantError },
+        { data: currentParticipantRows, error: currentParticipantError },
+      ] = await Promise.all([
+        optionFetch,
+        supabase
+          .from('itineraries')
+          .select('id, title, meeting_time, location_text, estimated_budget, estimated_duration, share_text')
+          .eq('room_id', roomId)
+          .limit(1),
+        supabase
+          .from('plan_participants')
+          .select('id', { count: 'exact', head: true })
+          .eq('room_id', roomId),
+        supabase
+          .from('plan_participants')
+          .select('role')
+          .eq('room_id', roomId)
+          .eq('user_id', session.user.id)
+          .limit(1),
+      ]);
 
-        if (optionError) {
-          throw new Error(optionError.message);
-        }
-
-        const optionsById = new Map(((optionData ?? []) as unknown as OptionRow[]).map((option) => [option.id, option]));
-
-        winningOption = result.winning_option_id ? optionsById.get(result.winning_option_id) : undefined;
-        topOptions = topOptionIds.map((optionId) => optionsById.get(optionId)).filter((option): option is OptionRow => Boolean(option));
+      if (optionError) {
+        throw new Error(optionError.message);
       }
-
-      const { data: itineraryRows, error: itineraryError } = await supabase
-        .from('itineraries')
-        .select('id, title, meeting_time, location_text, estimated_budget, estimated_duration, share_text')
-        .eq('room_id', roomId)
-        .limit(1);
 
       if (itineraryError) {
         throw new Error(itineraryError.message);
       }
 
-      const { count: participantCount, error: participantError } = await supabase
-        .from('plan_participants')
-        .select('id', { count: 'exact', head: true })
-        .eq('room_id', roomId);
-
       if (participantError) {
         throw new Error(participantError.message);
       }
 
-      const { data: currentParticipantRows, error: currentParticipantError } = await supabase
-        .from('plan_participants')
-        .select('role')
-        .eq('room_id', roomId)
-        .eq('user_id', session.user.id)
-        .limit(1);
-
       if (currentParticipantError) {
         throw new Error(currentParticipantError.message);
       }
+
+      const optionsById = new Map(((optionData ?? []) as unknown as OptionRow[]).map((option) => [option.id, option]));
+      const winningOption = result.winning_option_id ? optionsById.get(result.winning_option_id) : undefined;
+      const topOptions = topOptionIds.map((optionId) => optionsById.get(optionId)).filter((option): option is OptionRow => Boolean(option));
 
       setResultData({
         itinerary: (itineraryRows?.[0] as unknown as ItineraryRow | undefined) ?? undefined,

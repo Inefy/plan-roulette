@@ -438,7 +438,7 @@ export default function JoinTokenRoute() {
     return () => {
       isMounted = false;
     };
-  }, [ensureAuthenticatedSession, isAuthLoading, retryCount, token]);
+  }, [isAuthLoading, retryCount, session, token]);
 
   async function handleJoinRoom() {
     if (!room || !token) {

@@ -2,7 +2,7 @@
 import { useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import { Button, Card, EmptyState, LoadingState, Screen, Text } from '../../components';
+import { Button, Card, Chip, EmptyState, LoadingState, Screen, Text } from '../../components';
 import { theme } from '../../constants/theme';
 import { useCreatePlan } from '../../features/create/CreatePlanProvider';
 import { PlanOptionCard } from '../../features/plan/components';
@@ -46,10 +46,13 @@ export default function CreateOptionsRoute() {
 
   return (
     <Screen contentContainerStyle={styles.screen} padded={false} scroll>
-      <View style={styles.header}>
-        <Text variant="title">Plan Options</Text>
-        <Text color="textSecondary">Review the first deck before creating the invite room.</Text>
-      </View>
+      <Card style={styles.heroCard} variant="elevated">
+        <Chip title="Deck preview" tone="orange" />
+        <View style={styles.header}>
+          <Text variant="display">Plan Options</Text>
+          <Text color="textSecondary">Review the first deck before creating the invite room.</Text>
+        </View>
+      </Card>
 
       {generatedOptions.length === 0 ? (
         <Card variant="warm">
@@ -72,17 +75,25 @@ export default function CreateOptionsRoute() {
             </View>
           </Card>
 
-          <View style={styles.optionList}>
-            {generatedOptions.map((option) => (
-              <PlanOptionCard
-                key={option.templateId}
-                description={option.description}
-                meta={formatOptionMeta(option)}
-                tag={toLabel(option.category)}
-                tagTone="orange"
-                title={option.title}
-              />
-            ))}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text variant="subtitle">Suggested Deck</Text>
+              <Text color="textSecondary" variant="caption">
+                Best matches first
+              </Text>
+            </View>
+            <View style={styles.optionList}>
+              {generatedOptions.map((option) => (
+                <PlanOptionCard
+                  key={option.templateId}
+                  description={option.description}
+                  meta={formatOptionMeta(option)}
+                  tag={toLabel(option.category)}
+                  tagTone="orange"
+                  title={option.title}
+                />
+              ))}
+            </View>
           </View>
         </>
       )}
@@ -136,6 +147,9 @@ const styles = StyleSheet.create({
   header: {
     gap: theme.spacing.sm,
   },
+  heroCard: {
+    gap: theme.spacing.lg,
+  },
   messageBox: {
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.nopeCoral,
@@ -150,6 +164,15 @@ const styles = StyleSheet.create({
   screen: {
     gap: theme.spacing.xl,
     padding: theme.spacing.xl,
+  },
+  section: {
+    gap: theme.spacing.md,
+  },
+  sectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    justifyContent: 'space-between',
   },
   summaryCard: {
     alignItems: 'flex-start',

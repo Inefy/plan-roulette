@@ -1,16 +1,16 @@
 // src/constants/theme.ts
 export const palette = {
-  afterpartyNavy: '#151926',
-  warmPaper: '#FFF8EA',
-  rouletteRed: '#F15A4A',
-  electricTangerine: '#FF9F1C',
-  goGreen: '#2EC27E',
-  nopeCoral: '#FF6B6B',
-  poolBlue: '#35A7FF',
-  lavenderPop: '#9B7EDE',
-  inkBlack: '#1F2330',
-  sidewalkGray: '#7C8191',
-  nachoYellow: '#FFD166',
+  afterpartyNavy: '#171B2A',
+  warmPaper: '#F8F2E7',
+  rouletteRed: '#E94E3F',
+  electricTangerine: '#F39A21',
+  goGreen: '#1F9D66',
+  nopeCoral: '#E85D66',
+  poolBlue: '#2188D9',
+  lavenderPop: '#8667D3',
+  inkBlack: '#1C2230',
+  sidewalkGray: '#737887',
+  nachoYellow: '#F5C84C',
 } as const;
 
 export const theme = {
@@ -23,9 +23,11 @@ export const theme = {
     muted: 'rgba(124, 129, 145, 0.16)',
     overlay: 'rgba(21, 25, 38, 0.2)',
     surface: '#FFFFFF',
-    surfaceWarm: '#FFF1D0',
+    surfaceRaised: '#FFFCF6',
+    surfaceSubtle: '#F1E8DA',
+    surfaceWarm: '#FDECC7',
     textPrimary: palette.inkBlack,
-    textSecondary: '#5F6472',
+    textSecondary: '#596070',
     textInverse: palette.warmPaper,
   },
   radius: {
@@ -38,8 +40,7 @@ export const theme = {
   },
   shadow: {
     card: {
-      boxShadow: '0px 6px 12px rgba(21, 25, 38, 0.12)',
-      elevation: 3,
+      boxShadow: '0px 10px 28px rgba(21, 25, 38, 0.1)',
     },
   },
   spacing: {

@@ -58,10 +58,10 @@ const styles = StyleSheet.create({
   base: {
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
-    gap: theme.spacing.md,
-    padding: theme.spacing.lg,
+    gap: theme.spacing.lg,
+    padding: theme.spacing.xl,
   },
   default: {},
   disabled: {
@@ -69,7 +69,8 @@ const styles = StyleSheet.create({
   },
   elevated: {
     ...theme.shadow.card,
-    borderColor: 'transparent',
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: 'rgba(31, 35, 48, 0.08)',
   },
   outlined: {
     backgroundColor: 'transparent',
@@ -82,5 +83,6 @@ const styles = StyleSheet.create({
   },
   warm: {
     backgroundColor: theme.colors.surfaceWarm,
+    borderColor: 'rgba(243, 154, 33, 0.24)',
   },
 });

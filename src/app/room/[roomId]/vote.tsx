@@ -1,6 +1,6 @@
 // src/app/room/[roomId]/vote.tsx
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, Card, Chip, EmptyState, ErrorState, LoadingState, ProgressBar, Screen, SkeletonBlock, SkeletonText, Text } from '../../../components';
@@ -231,6 +231,10 @@ export default function RoomVoteRoute() {
   const params = useLocalSearchParams<RoomVoteRouteParams>();
   const roomId = useMemo(() => getParamValue(params.roomId)?.trim(), [params.roomId]);
   const { isLoading: isAuthLoading, session } = useAuth();
+  const userId = session?.user.id;
+  const queuedRefreshRef = useRef(false);
+  const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const refreshInFlightRef = useRef(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [failedVote, setFailedVote] = useState<FailedVote | undefined>();
   const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>();
@@ -244,7 +248,7 @@ export default function RoomVoteRoute() {
 
   const refreshVoting = useCallback(
     async (isBackgroundRefresh = false) => {
-      if (!roomId || !session?.user) {
+      if (!roomId || !userId) {
         setScreenError({
           message: roomId ? 'Join this room before voting.' : 'The room link is missing a room id.',
           retryable: false,
@@ -254,92 +258,114 @@ export default function RoomVoteRoute() {
         return;
       }
 
-      if (isBackgroundRefresh) {
-        setIsRefreshing(true);
-      } else {
-        setIsInitialLoading(true);
+      if (refreshInFlightRef.current) {
+        queuedRefreshRef.current = true;
+        return;
       }
+
+      refreshInFlightRef.current = true;
+      let nextIsBackgroundRefresh = isBackgroundRefresh;
 
       try {
-        const { data: roomData, error: roomError } = await supabase
-          .from('plan_rooms')
-          .select('id, title, status, budget_tier, category_preferences, decision_mode')
-          .eq('id', roomId)
-          .single();
+        do {
+          queuedRefreshRef.current = false;
 
-        if (roomError) {
-          throw new Error(roomError.message);
-        }
-
-        const { data: participantData, error: participantError } = await supabase
-          .from('plan_participants')
-          .select('id, user_id, display_name, role, is_ready')
-          .eq('room_id', roomId)
-          .eq('user_id', session.user.id)
-          .single();
-
-        if (participantError) {
-          throw new Error(participantError.message);
-        }
-
-        const { data: optionsData, error: optionsError } = await supabase
-          .from('plan_options')
-          .select('id, title, description, category, budget_tier, energy_level, location_mode, min_duration_minutes, max_duration_minutes, created_at')
-          .eq('room_id', roomId)
-          .eq('is_active', true)
-          .order('created_at', { ascending: true });
-
-        if (optionsError) {
-          throw new Error(optionsError.message);
-        }
-
-        const { data: votesData, error: votesError } = await supabase
-          .from('plan_votes')
-          .select('id, room_id, option_id, participant_id, value, created_at, updated_at')
-          .eq('room_id', roomId)
-          .eq('participant_id', participantData.id);
-
-        if (votesError) {
-          throw new Error(votesError.message);
-        }
-
-        const options = (optionsData ?? []) as OptionRow[];
-        const votesByOptionId = buildVotesByOptionId((votesData ?? []) as VoteRow[]);
-        const firstUnvotedIndex = getFirstUnvotedIndex(options, votesByOptionId);
-
-        setScreenData({
-          currentParticipant: participantData as ParticipantRow,
-          options,
-          room: roomData as RoomRow,
-          votesByOptionId,
-        });
-        setCurrentIndex((activeIndex) => {
-          if (options.length === 0) {
-            return 0;
+          if (nextIsBackgroundRefresh) {
+            setIsRefreshing(true);
+          } else {
+            setIsInitialLoading(true);
           }
 
-          if (firstUnvotedIndex === -1) {
-            return Math.min(activeIndex, options.length - 1);
+          try {
+            const [
+              { data: roomData, error: roomError },
+              { data: participantData, error: participantError },
+              { data: optionsData, error: optionsError },
+            ] = await Promise.all([
+              supabase
+                .from('plan_rooms')
+                .select('id, title, status, budget_tier, category_preferences, decision_mode')
+                .eq('id', roomId)
+                .single(),
+              supabase
+                .from('plan_participants')
+                .select('id, user_id, display_name, role, is_ready')
+                .eq('room_id', roomId)
+                .eq('user_id', userId)
+                .single(),
+              supabase
+                .from('plan_options')
+                .select('id, title, description, category, budget_tier, energy_level, location_mode, min_duration_minutes, max_duration_minutes, created_at')
+                .eq('room_id', roomId)
+                .eq('is_active', true)
+                .order('created_at', { ascending: true }),
+            ]);
+
+            if (roomError) {
+              throw new Error(roomError.message);
+            }
+
+            if (participantError) {
+              throw new Error(participantError.message);
+            }
+
+            if (optionsError) {
+              throw new Error(optionsError.message);
+            }
+
+            const { data: votesData, error: votesError } = await supabase
+              .from('plan_votes')
+              .select('id, room_id, option_id, participant_id, value, created_at, updated_at')
+              .eq('room_id', roomId)
+              .eq('participant_id', participantData.id);
+
+            if (votesError) {
+              throw new Error(votesError.message);
+            }
+
+            const options = (optionsData ?? []) as OptionRow[];
+            const votesByOptionId = buildVotesByOptionId((votesData ?? []) as VoteRow[]);
+            const firstUnvotedIndex = getFirstUnvotedIndex(options, votesByOptionId);
+
+            setScreenData({
+              currentParticipant: participantData as ParticipantRow,
+              options,
+              room: roomData as RoomRow,
+              votesByOptionId,
+            });
+            setCurrentIndex((activeIndex) => {
+              if (options.length === 0) {
+                return 0;
+              }
+
+              if (firstUnvotedIndex === -1) {
+                return Math.min(activeIndex, options.length - 1);
+              }
+
+              const activeOption = options[activeIndex];
+
+              if (activeOption && !votesByOptionId[activeOption.id]) {
+                return activeIndex;
+              }
+
+              return firstUnvotedIndex;
+            });
+            setFailedVote(undefined);
+            setScreenError(undefined);
+          } catch (error) {
+            setScreenError(createVoteError(error instanceof Error ? error.message : 'Network error.'));
+          } finally {
+            setIsInitialLoading(false);
+            setIsRefreshing(false);
           }
 
-          const activeOption = options[activeIndex];
-
-          if (activeOption && !votesByOptionId[activeOption.id]) {
-            return activeIndex;
-          }
-
-          return firstUnvotedIndex;
-        });
-        setFailedVote(undefined);
-        setScreenError(undefined);
-      } catch (error) {
-        setScreenError(createVoteError(error instanceof Error ? error.message : 'Network error.'));
+          nextIsBackgroundRefresh = true;
+        } while (queuedRefreshRef.current);
       } finally {
-        setIsInitialLoading(false);
-        setIsRefreshing(false);
+        refreshInFlightRef.current = false;
       }
     },
-    [roomId, session],
+    [roomId, userId],
   );
 
   const markComplete = useCallback(
@@ -411,21 +437,26 @@ export default function RoomVoteRoute() {
   }, [isAuthLoading, refreshVoting]);
 
   useEffect(() => {
-    if (!roomId || !session?.user) {
+    if (!roomId || !userId) {
       return undefined;
+    }
+
+    function scheduleRefresh() {
+      if (refreshDebounceRef.current) {
+        clearTimeout(refreshDebounceRef.current);
+      }
+
+      refreshDebounceRef.current = setTimeout(() => {
+        refreshDebounceRef.current = undefined;
+        void refreshVoting(true);
+      }, 250);
     }
 
     const channel = supabase
       .channel(`room-vote:${roomId}`)
-      .on('postgres_changes', { event: '*', filter: `id=eq.${roomId}`, schema: 'public', table: 'plan_rooms' }, () => {
-        void refreshVoting(true);
-      })
-      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_options' }, () => {
-        void refreshVoting(true);
-      })
-      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_votes' }, () => {
-        void refreshVoting(true);
-      })
+      .on('postgres_changes', { event: '*', filter: `id=eq.${roomId}`, schema: 'public', table: 'plan_rooms' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_options' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_votes' }, scheduleRefresh)
       .subscribe();
 
     const intervalId = setInterval(() => {
@@ -433,10 +464,15 @@ export default function RoomVoteRoute() {
     }, 60000);
 
     return () => {
+      if (refreshDebounceRef.current) {
+        clearTimeout(refreshDebounceRef.current);
+        refreshDebounceRef.current = undefined;
+      }
+
       clearInterval(intervalId);
       void supabase.removeChannel(channel);
     };
-  }, [refreshVoting, roomId, session]);
+  }, [refreshVoting, roomId, userId]);
 
   async function persistVote(option: OptionRow, value: VoteValue, shouldAdvance: boolean, isRetry = false) {
     if (!roomId || !screenData || isSavingVote || (!isRetry && failedVote)) {

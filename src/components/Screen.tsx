@@ -32,7 +32,7 @@ export function Screen({
   return (
     <SafeAreaView edges={edges} style={[styles.safeArea, backgroundStyle, style]}>
       {scroll ? (
-        <ScrollView contentContainerStyle={contentStyle} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={contentStyle} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled">
           {children}
         </ScrollView>
       ) : (

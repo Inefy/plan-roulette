@@ -49,6 +49,8 @@ const allowedStringValuesByKey: Partial<Record<AnalyticsPropertyKey, readonly st
   source: ['itinerary', 'result'],
 };
 
+let cachedAnalyticsUserId: string | undefined;
+
 function sanitizeAnalyticsProperties(properties: AnalyticsProperties | undefined) {
   const sanitizedProperties: Record<string, boolean | number | string | null> = {};
 
@@ -75,11 +77,23 @@ function sanitizeAnalyticsProperties(properties: AnalyticsProperties | undefined
   return sanitizedProperties;
 }
 
+async function getAnalyticsUserId() {
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error) {
+    return cachedAnalyticsUserId;
+  }
+
+  cachedAnalyticsUserId = data.session?.user.id;
+
+  return cachedAnalyticsUserId;
+}
+
 async function insertAnalyticsEvent(input: TrackAnalyticsEventInput) {
   try {
-    const { data, error: userError } = await supabase.auth.getUser();
+    const userId = await getAnalyticsUserId();
 
-    if (userError || !data.user) {
+    if (!userId) {
       return;
     }
 
@@ -89,7 +103,7 @@ async function insertAnalyticsEvent(input: TrackAnalyticsEventInput) {
       participant_id: input.participantId ?? null,
       properties: sanitizeAnalyticsProperties(input.properties),
       room_id: input.roomId ?? null,
-      user_id: data.user.id,
+      user_id: userId,
     });
 
     if (error) {
