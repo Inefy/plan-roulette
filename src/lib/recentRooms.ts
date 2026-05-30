@@ -93,7 +93,13 @@ export async function getRecentRooms() {
     return [];
   }
 
-  const parsedValue: unknown = JSON.parse(rawValue);
+  let parsedValue: unknown;
+
+  try {
+    parsedValue = JSON.parse(rawValue);
+  } catch {
+    return [];
+  }
 
   if (!Array.isArray(parsedValue)) {
     return [];

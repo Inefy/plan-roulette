@@ -13,6 +13,7 @@
     "expo-haptics": "~56.0.3",
     "expo-linking": "~56.0.13",
     "expo-router": "~56.2.8",
+    "expo-splash-screen": "~56.0.10",
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -28,13 +29,18 @@
     "tsx": "^4.22.3",
     "typescript": "~6.0.3"
   },
+  "overrides": {
+    "xcode": {
+      "uuid": "^11.1.1"
+    }
+  },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/lib/planGenerator.test.ts src/lib/consensusEngine.test.ts src/lib/itineraryBuilder.test.ts src/lib/linkBuilder.test.ts"
+    "test": "node --import tsx --test src/lib/planGenerator.test.ts src/lib/consensusEngine.test.ts src/lib/itineraryBuilder.test.ts src/lib/linkBuilder.test.ts src/features/create/CreatePlanProvider.test.ts"
   },
   "private": true
 }

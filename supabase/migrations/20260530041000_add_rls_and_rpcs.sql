@@ -556,10 +556,6 @@ declare
   v_participant_count integer;
   v_host_display_name text;
 begin
-  if auth.uid() is null then
-    raise exception 'Authentication is required.';
-  end if;
-
   if nullif(trim(p_invite_token), '') is null then
     return;
   end if;
@@ -713,6 +709,69 @@ begin
 end;
 $$;
 
+create or replace function public.create_plan_room_with_options(
+  p_title text,
+  p_options jsonb,
+  p_display_name text default null,
+  p_description text default null,
+  p_decision_mode text default 'consensus',
+  p_budget_tier text default 'low',
+  p_energy_level text default 'medium',
+  p_location_mode text default 'in_person',
+  p_weather_mode text default 'weather_flexible',
+  p_planning_effort text default 'light',
+  p_category_preferences text[] default '{}'::text[],
+  p_starts_at timestamptz default null,
+  p_ends_at timestamptz default null,
+  p_location_text text default null,
+  p_max_distance_km numeric default null,
+  p_max_participants integer default null
+)
+returns table(room_id uuid, participant_id uuid, invite_token text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invite_token text;
+  v_participant_id uuid;
+  v_room_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication is required.';
+  end if;
+
+  if p_options is null or jsonb_typeof(p_options) <> 'array' or jsonb_array_length(p_options) = 0 then
+    raise exception 'At least one generated option is required.';
+  end if;
+
+  select created_room.room_id, created_room.participant_id, created_room.invite_token
+  into v_room_id, v_participant_id, v_invite_token
+  from public.create_plan_room(
+    p_title,
+    p_display_name,
+    p_description,
+    p_decision_mode,
+    p_budget_tier,
+    p_energy_level,
+    p_location_mode,
+    p_weather_mode,
+    p_planning_effort,
+    p_category_preferences,
+    p_starts_at,
+    p_ends_at,
+    p_location_text,
+    p_max_distance_km,
+    p_max_participants
+  ) as created_room;
+
+  perform 1
+  from public.add_generated_options_to_room(v_room_id, p_options);
+
+  return query select v_room_id, v_participant_id, v_invite_token;
+end;
+$$;
+
 create or replace function public.cast_vote(
   p_room_id uuid,
   p_option_id uuid,
@@ -725,6 +784,7 @@ set search_path = public
 as $$
 declare
   v_participant_id uuid;
+  v_room_status text;
   v_vote public.plan_votes;
 begin
   if auth.uid() is null then
@@ -733,6 +793,20 @@ begin
 
   if p_value not in ('yes', 'maybe', 'skip', 'no') then
     raise exception 'Unsupported vote value.';
+  end if;
+
+  select room.status
+  into v_room_status
+  from public.plan_rooms room
+  where room.id = p_room_id
+  for update;
+
+  if v_room_status is null then
+    raise exception 'Room was not found.';
+  end if;
+
+  if v_room_status not in ('inviting', 'voting') then
+    raise exception 'Voting is closed for this room.';
   end if;
 
   v_participant_id := public.participant_id_for_room(p_room_id);
@@ -765,9 +839,24 @@ as $$
 declare
   v_participant_id uuid;
   v_participant public.plan_participants;
+  v_room_status text;
 begin
   if auth.uid() is null then
     raise exception 'Authentication is required.';
+  end if;
+
+  select room.status
+  into v_room_status
+  from public.plan_rooms room
+  where room.id = p_room_id
+  for update;
+
+  if v_room_status is null then
+    raise exception 'Room was not found.';
+  end if;
+
+  if v_room_status not in ('inviting', 'voting') then
+    raise exception 'Voting is closed for this room.';
   end if;
 
   v_participant_id := public.participant_id_for_room(p_room_id);
@@ -798,8 +887,26 @@ begin
     raise exception 'Authentication is required.';
   end if;
 
-  if not public.is_room_host(p_room_id) then
+  select *
+  into v_room
+  from public.plan_rooms room
+  where room.id = p_room_id
+  for update;
+
+  if v_room.id is null then
+    raise exception 'Room was not found.';
+  end if;
+
+  if v_room.host_user_id <> auth.uid() then
     raise exception 'Only the host can close voting.';
+  end if;
+
+  if v_room.status = 'deciding' then
+    return v_room;
+  end if;
+
+  if v_room.status not in ('inviting', 'voting') then
+    raise exception 'Voting is already closed.';
   end if;
 
   update public.plan_rooms
@@ -808,6 +915,91 @@ begin
   returning * into v_room;
 
   return v_room;
+end;
+$$;
+
+create or replace function public.prepare_room_finalization(p_room_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room public.plan_rooms;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication is required.';
+  end if;
+
+  select *
+  into v_room
+  from public.plan_rooms room
+  where room.id = p_room_id
+  for update;
+
+  if v_room.id is null then
+    raise exception 'Room was not found.';
+  end if;
+
+  if v_room.host_user_id <> auth.uid() then
+    raise exception 'Only the host can close voting and pick a winner.';
+  end if;
+
+  if v_room.status not in ('inviting', 'voting', 'deciding') then
+    raise exception 'Voting is already closed.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.plan_votes vote
+    join public.plan_options option_row
+      on option_row.id = vote.option_id
+     and option_row.room_id = p_room_id
+     and option_row.is_active = true
+    where vote.room_id = p_room_id
+  ) then
+    raise exception 'There are not enough votes to pick a winner yet.';
+  end if;
+
+  if v_room.status <> 'deciding' then
+    update public.plan_rooms
+    set status = 'deciding'
+    where id = p_room_id
+    returning * into v_room;
+  end if;
+
+  return jsonb_build_object(
+    'room',
+    to_jsonb(v_room),
+    'participants',
+    coalesce(
+      (
+        select jsonb_agg(to_jsonb(participant) order by participant.joined_at)
+        from public.plan_participants participant
+        where participant.room_id = p_room_id
+      ),
+      '[]'::jsonb
+    ),
+    'options',
+    coalesce(
+      (
+        select jsonb_agg(to_jsonb(option_row) order by option_row.created_at)
+        from public.plan_options option_row
+        where option_row.room_id = p_room_id
+          and option_row.is_active = true
+      ),
+      '[]'::jsonb
+    ),
+    'votes',
+    coalesce(
+      (
+        select jsonb_agg(to_jsonb(vote))
+        from public.plan_votes vote
+        where vote.room_id = p_room_id
+      ),
+      '[]'::jsonb
+    )
+  );
 end;
 $$;
 
@@ -1064,10 +1256,13 @@ $$;
 grant execute on function public.create_plan_room(text, text, text, text, text, text, text, text, text, text[], timestamptz, timestamptz, text, numeric, integer) to authenticated;
 grant execute on function public.join_room_by_token(text, text) to authenticated;
 grant execute on function public.resolve_room_by_token(text) to authenticated;
+grant execute on function public.resolve_room_by_token(text) to anon;
 grant execute on function public.add_generated_options_to_room(uuid, jsonb) to authenticated;
+grant execute on function public.create_plan_room_with_options(text, jsonb, text, text, text, text, text, text, text, text, text[], timestamptz, timestamptz, text, numeric, integer) to authenticated;
 grant execute on function public.cast_vote(uuid, uuid, text) to authenticated;
 grant execute on function public.mark_vote_complete(uuid) to authenticated;
 grant execute on function public.close_voting(uuid) to authenticated;
+grant execute on function public.prepare_room_finalization(uuid) to authenticated;
 grant execute on function public.store_room_result(uuid, jsonb, jsonb) to authenticated;
 grant execute on function public.start_voting_round(uuid, uuid[]) to authenticated;
 grant execute on function public.save_room(uuid, text) to authenticated;

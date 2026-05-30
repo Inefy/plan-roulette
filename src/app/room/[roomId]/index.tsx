@@ -308,12 +308,26 @@ export default function RoomRoute() {
       return undefined;
     }
 
+    const channel = supabase
+      .channel(`room-lobby:${roomId}`)
+      .on('postgres_changes', { event: '*', filter: `id=eq.${roomId}`, schema: 'public', table: 'plan_rooms' }, () => {
+        void refreshLobby(true);
+      })
+      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_participants' }, () => {
+        void refreshLobby(true);
+      })
+      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_options' }, () => {
+        void refreshLobby(true);
+      })
+      .subscribe();
+
     const intervalId = setInterval(() => {
       refreshLobby(true);
-    }, 10000);
+    }, 60000);
 
     return () => {
       clearInterval(intervalId);
+      void supabase.removeChannel(channel);
     };
   }, [refreshLobby, roomId, session]);
 
@@ -581,12 +595,6 @@ export default function RoomRoute() {
               onPress={handleCloseVoting}
               title="Close Voting / Pick Winner"
               variant="danger"
-            />
-            <Button
-              fullWidth
-              onPress={() => setFeedbackMessage('Adding custom options is coming soon.')}
-              title="Add option"
-              variant="outline"
             />
           </View>
         </Card>

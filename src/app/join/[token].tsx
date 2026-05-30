@@ -380,20 +380,20 @@ export default function JoinTokenRoute() {
       setIsResolving(true);
 
       try {
-        const activeSession = await ensureAuthenticatedSession('Guest planner');
+        const { data, error: resolveError } = await supabase.rpc('resolve_room_by_token', {
+          p_invite_token: token,
+        });
 
         if (!isMounted) {
           return;
         }
 
-        setDisplayName((currentDisplayName) => currentDisplayName || getDefaultDisplayName(activeSession));
-
-        const { data, error: resolveError } = await supabase.rpc('resolve_room_by_token', {
-          p_invite_token: token,
-        });
-
         if (resolveError) {
           throw new Error(resolveError.message);
+        }
+
+        if (session?.user) {
+          setDisplayName((currentDisplayName) => currentDisplayName || getDefaultDisplayName(session));
         }
 
         const resolvedRoom = parseResolvedRoom(data as unknown);

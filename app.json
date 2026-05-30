@@ -7,13 +7,8 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "backgroundColor": "#FFF8EA",
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain"
-    },
     "ios": {
-      "bundleIdentifier": "com.example.planroulette",
+      "bundleIdentifier": "app.planroulette.mobile",
       "supportsTablet": true
     },
     "android": {
@@ -23,7 +18,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.example.planroulette",
+      "package": "app.planroulette.mobile",
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -32,6 +27,15 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFF8EA",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain"
+        }
+      ],
       [
         "expo-calendar",
         {

@@ -18,7 +18,7 @@ test('encodes invite token path segments', () => {
 });
 
 test('builds invite share message', () => {
-  assert.equal(buildInviteShareMessage('planroulette://join/abc123'), 'Vote on what we’re doing tonight: planroulette://join/abc123');
+  assert.equal(buildInviteShareMessage('planroulette://join/abc123'), "Vote on what we're doing tonight: planroulette://join/abc123");
 });
 
 test('parses invite tokens from production links', () => {

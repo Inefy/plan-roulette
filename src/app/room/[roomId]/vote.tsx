@@ -415,12 +415,26 @@ export default function RoomVoteRoute() {
       return undefined;
     }
 
+    const channel = supabase
+      .channel(`room-vote:${roomId}`)
+      .on('postgres_changes', { event: '*', filter: `id=eq.${roomId}`, schema: 'public', table: 'plan_rooms' }, () => {
+        void refreshVoting(true);
+      })
+      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_options' }, () => {
+        void refreshVoting(true);
+      })
+      .on('postgres_changes', { event: '*', filter: `room_id=eq.${roomId}`, schema: 'public', table: 'plan_votes' }, () => {
+        void refreshVoting(true);
+      })
+      .subscribe();
+
     const intervalId = setInterval(() => {
       refreshVoting(true);
-    }, 12000);
+    }, 60000);
 
     return () => {
       clearInterval(intervalId);
+      void supabase.removeChannel(channel);
     };
   }, [refreshVoting, roomId, session]);
 

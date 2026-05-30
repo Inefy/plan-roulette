@@ -8,39 +8,15 @@ import { buildInviteLink } from '../../lib/linkBuilder';
 import { generatePlanOptions, type GeneratedPlanOption, type PlanGeneratorConstraints } from '../../lib/planGenerator';
 import { getFriendlyRemoteError } from '../../lib/remoteErrors';
 import { supabase } from '../../lib/supabase';
-import type { BudgetTier, EnergyLevel, LocationMode, PlanCategory, WeatherMode } from '../../types/domain';
+import type { PlanCategory } from '../../types/domain';
 import { useAuth } from '../auth/AuthProvider';
-
-export type CreatePlanDraft = {
-  allowAgeSensitive: boolean;
-  budgetTier: BudgetTier;
-  categories: PlanCategory[];
-  endsAt: string;
-  energyLevel: EnergyLevel;
-  groupSizeEstimate: string;
-  locationMode: LocationMode;
-  startsAt: string;
-  title: string;
-  weatherMode: WeatherMode;
-};
+import { validateCreatePlanDraft, type CreatePlanDraft, type ParsedCreatePlanDraft } from './createPlanValidation';
 
 export type CreatedRoomInvite = {
   inviteToken: string;
   inviteUrl: string;
   participantId: string;
   roomId: string;
-};
-
-type ParsedCreatePlanDraft = {
-  duration?: PlanGeneratorConstraints['duration'];
-  endsAt?: string;
-  groupSize: number;
-  startsAt?: string;
-};
-
-type CreatePlanValidationResult = {
-  errors: string[];
-  parsed?: ParsedCreatePlanDraft;
 };
 
 type CreatePlanContextValue = {
@@ -81,88 +57,6 @@ const initialDraft: CreatePlanDraft = {
 };
 
 const CreatePlanContext = createContext<CreatePlanContextValue | undefined>(undefined);
-
-function parseOptionalDateTime(value: string, label: string, errors: string[]) {
-  const trimmedValue = value.trim();
-
-  if (!trimmedValue) {
-    return undefined;
-  }
-
-  const parsedDate = new Date(trimmedValue);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    errors.push(`${label} must be a valid date and time.`);
-    return undefined;
-  }
-
-  return parsedDate;
-}
-
-function parseGroupSize(value: string, errors: string[]) {
-  const parsedValue = Number(value.trim());
-
-  if (!Number.isInteger(parsedValue) || parsedValue < 1) {
-    errors.push('Group size estimate must be a whole number of at least 1.');
-    return undefined;
-  }
-
-  return parsedValue;
-}
-
-function buildDurationConstraint(startsAt: Date | undefined, endsAt: Date | undefined) {
-  if (!startsAt || !endsAt) {
-    return undefined;
-  }
-
-  const maxMinutes = Math.floor((endsAt.getTime() - startsAt.getTime()) / 60000);
-
-  if (maxMinutes < 30) {
-    return undefined;
-  }
-
-  return { maxMinutes };
-}
-
-export function validateCreatePlanDraft(draft: CreatePlanDraft): CreatePlanValidationResult {
-  const errors: string[] = [];
-  const title = draft.title.trim();
-
-  if (!title) {
-    errors.push('Title is required.');
-  }
-
-  if (draft.categories.length === 0) {
-    errors.push('Choose at least one category.');
-  }
-
-  const groupSize = parseGroupSize(draft.groupSizeEstimate, errors);
-  const startsAt = parseOptionalDateTime(draft.startsAt, 'Window start', errors);
-  const endsAt = parseOptionalDateTime(draft.endsAt, 'Window end', errors);
-  const hasOneTimeValue = Boolean(draft.startsAt.trim()) !== Boolean(draft.endsAt.trim());
-
-  if (hasOneTimeValue) {
-    errors.push('Add both a start and end time, or leave the date/time window blank.');
-  }
-
-  if (startsAt && endsAt && endsAt <= startsAt) {
-    errors.push('Window end must be after window start.');
-  }
-
-  if (errors.length > 0 || !groupSize) {
-    return { errors };
-  }
-
-  return {
-    errors,
-    parsed: {
-      duration: buildDurationConstraint(startsAt, endsAt),
-      endsAt: endsAt?.toISOString(),
-      groupSize,
-      startsAt: startsAt?.toISOString(),
-    },
-  };
-}
 
 function createGeneratorConstraints(draft: CreatePlanDraft, parsed: ParsedCreatePlanDraft): PlanGeneratorConstraints {
   return {
@@ -245,7 +139,9 @@ export function CreatePlanProvider({ children }: CreatePlanProviderProps) {
         ...currentDraft,
         [key]: value,
       }));
+      setCreatedInvite(undefined);
       setErrorMessage(undefined);
+      setGeneratedOptions([]);
       setValidationErrors([]);
     },
     [],
@@ -262,7 +158,9 @@ export function CreatePlanProvider({ children }: CreatePlanProviderProps) {
           : [...currentDraft.categories, category],
       };
     });
+    setCreatedInvite(undefined);
     setErrorMessage(undefined);
+    setGeneratedOptions([]);
     setValidationErrors([]);
   }, []);
 
@@ -335,7 +233,7 @@ export function CreatePlanProvider({ children }: CreatePlanProviderProps) {
       const activeSession = await ensureAuthenticatedSession();
       const displayName = getSessionDisplayName(activeSession);
 
-      const { data: roomData, error: roomError } = await supabase.rpc('create_plan_room', {
+      const { data: roomData, error: roomError } = await supabase.rpc('create_plan_room_with_options', {
         p_budget_tier: draft.budgetTier,
         p_category_preferences: draft.categories,
         p_decision_mode: 'consensus',
@@ -347,6 +245,7 @@ export function CreatePlanProvider({ children }: CreatePlanProviderProps) {
         p_location_text: null,
         p_max_distance_km: null,
         p_max_participants: validation.parsed.groupSize,
+        p_options: optionsForRoom.map(toGeneratedOptionPayload),
         p_planning_effort: 'light',
         p_starts_at: validation.parsed.startsAt ?? null,
         p_title: draft.title.trim(),
@@ -358,14 +257,6 @@ export function CreatePlanProvider({ children }: CreatePlanProviderProps) {
       }
 
       const createdRoom = parseCreateRoomRpcRow(roomData as unknown);
-      const { error: optionsError } = await supabase.rpc('add_generated_options_to_room', {
-        p_options: optionsForRoom.map(toGeneratedOptionPayload),
-        p_room_id: createdRoom.room_id,
-      });
-
-      if (optionsError) {
-        throw new Error(optionsError.message);
-      }
 
       trackAnalyticsEvent({
         name: 'room_created',

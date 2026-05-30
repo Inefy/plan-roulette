@@ -1,6 +1,6 @@
 // src/app/welcome.tsx
-import { PlaceholderScreen } from '../components/PlaceholderScreen';
+import { Redirect } from 'expo-router';
 
 export default function WelcomeRoute() {
-  return <PlaceholderScreen route="/welcome" title="Welcome" />;
+  return <Redirect href="/tabs/home" />;
 }

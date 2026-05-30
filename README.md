@@ -50,12 +50,12 @@ Expo config is prepared for internal builds with:
 - App name: `Plan Roulette`
 - Slug: `plan-roulette`
 - Scheme: `planroulette`
-- iOS bundle identifier placeholder: `com.example.planroulette`
-- Android package placeholder: `com.example.planroulette`
+- iOS bundle identifier: `app.planroulette.mobile`
+- Android package: `app.planroulette.mobile`
 - Icon placeholder: `./assets/icon.png`
 - Splash placeholder: `./assets/splash-icon.png`
 
-Replace the placeholder bundle/package identifiers before production store submission.
+Confirm the bundle/package identifiers against the final store accounts before production store submission.
 
 EAS profiles:
 

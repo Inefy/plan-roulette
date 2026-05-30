@@ -122,6 +122,10 @@ function isPermissionMessage(message: string) {
 }
 
 function throwFinalizationError(message: string): never {
+  if (message.toLowerCase().includes('not enough votes')) {
+    throw new RoomFinalizationError('not_enough_votes', 'There are not enough votes to pick a winner yet.');
+  }
+
   if (isPermissionMessage(message)) {
     throw new RoomFinalizationError('permission', 'Only the host can close voting and pick a winner.');
   }
@@ -270,6 +274,30 @@ function toPlanRoom(room: RoomRow, participants: readonly ParticipantRow[], opti
   };
 }
 
+type FinalizationState = {
+  options: OptionRow[];
+  participants: ParticipantRow[];
+  room: RoomRow;
+  votes: VoteRow[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function parseFinalizationState(value: unknown): FinalizationState {
+  if (!isRecord(value) || !isRecord(value.room) || !Array.isArray(value.options) || !Array.isArray(value.participants) || !Array.isArray(value.votes)) {
+    throwFinalizationError('Supabase did not return the finalization state.');
+  }
+
+  return {
+    options: value.options as unknown as OptionRow[],
+    participants: value.participants as ParticipantRow[],
+    room: value.room as unknown as RoomRow,
+    votes: value.votes as VoteRow[],
+  };
+}
+
 async function fetchFinalizationState(roomId: string) {
   const { data: roomData, error: roomError } = await supabase
     .from('plan_rooms')
@@ -363,6 +391,18 @@ async function fetchFinalizationState(roomId: string) {
   };
 }
 
+async function prepareFinalizationState(roomId: string) {
+  const { data, error } = await supabase.rpc('prepare_room_finalization', {
+    p_room_id: roomId,
+  });
+
+  if (error) {
+    throwFinalizationError(error.message);
+  }
+
+  return parseFinalizationState(data as unknown);
+}
+
 async function startVotingRound(roomId: string, activeOptionIds?: readonly string[]) {
   const { error } = await supabase.rpc('start_voting_round', {
     p_active_option_ids: activeOptionIds ? [...activeOptionIds] : null,
@@ -427,7 +467,7 @@ async function storeFinalizedResult(input: {
 }
 
 export async function finalizeRoomResult(roomId: string): Promise<FinalizedRoomResult> {
-  const { options, participants, room, votes } = await fetchFinalizationState(roomId);
+  const { options, participants, room, votes } = await prepareFinalizationState(roomId);
 
   if (!hasEnoughVotes(options, participants, votes)) {
     throw new RoomFinalizationError('not_enough_votes', 'There are not enough votes to pick a winner yet.');

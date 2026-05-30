@@ -1,6 +1,6 @@
 // src/app/tabs/groups.tsx
-import { PlaceholderScreen } from '../../components/PlaceholderScreen';
+import { Redirect } from 'expo-router';
 
 export default function GroupsRoute() {
-  return <PlaceholderScreen route="/tabs/groups" title="Groups" />;
+  return <Redirect href="/tabs/home" />;
 }

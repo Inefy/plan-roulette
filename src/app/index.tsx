@@ -1,6 +1,6 @@
 // src/app/index.tsx
-import { PlaceholderScreen } from '../components/PlaceholderScreen';
+import { Redirect } from 'expo-router';
 
 export default function IndexRoute() {
-  return <PlaceholderScreen route="/" title="Plan Roulette" />;
+  return <Redirect href="/tabs/home" />;
 }

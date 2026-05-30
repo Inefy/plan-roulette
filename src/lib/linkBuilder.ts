@@ -24,7 +24,7 @@ export function buildInviteLink(token: string, environment: InviteLinkEnvironmen
 }
 
 export function buildInviteShareMessage(link: string) {
-  return `Vote on what we’re doing tonight: ${link}`;
+  return `Vote on what we're doing tonight: ${link}`;
 }
 
 export function parseInviteTokenFromLink(link: string) {
