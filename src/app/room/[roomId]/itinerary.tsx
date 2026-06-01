@@ -19,6 +19,7 @@ import { rememberRecentRoom } from '../../../lib/recentRooms';
 import { getFriendlyRemoteError } from '../../../lib/remoteErrors';
 import { supabase } from '../../../lib/supabase';
 import type { BudgetTier, DecisionMode, ParticipantRole, PlanCategory, RoomStatus, VoteValue } from '../../../types/domain';
+import { getAvatarTone } from '../../../utils/avatar';
 
 type ItineraryRouteParams = {
   roomId?: string | string[];
@@ -125,22 +126,6 @@ function createItineraryError(message: string): ItineraryError {
   };
 }
 
-function getInitials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join('')
-    .toUpperCase();
-}
-
-function getAvatarTone(index: number) {
-  const tones = ['orange', 'blue', 'green', 'lavender', 'yellow', 'red'] as const;
-
-  return tones[index % tones.length];
-}
-
 function isMissingMeetingTime(meetingTime: string) {
   const normalizedMeetingTime = meetingTime.trim().toLowerCase();
 
@@ -178,7 +163,6 @@ function SupportList({
       {participants.map((participant, index) => (
         <View key={participant.id} style={styles.supportRow}>
           <Avatar
-            initials={getInitials(participant.display_name)}
             name={participant.display_name}
             size="sm"
             tone={getAvatarTone(index)}

@@ -14,6 +14,7 @@ import { getFriendlyRemoteError } from '../../../lib/remoteErrors';
 import { finalizeRoomResult, RoomFinalizationError } from '../../../lib/roomFinalizer';
 import { supabase } from '../../../lib/supabase';
 import type { BudgetTier, DecisionMode, ParticipantRole, PlanCategory, RoomStatus } from '../../../types/domain';
+import { getAvatarTone } from '../../../utils/avatar';
 
 type RoomRouteParams = {
   roomId?: string | string[];
@@ -102,22 +103,6 @@ function getStatusDescription(status: RoomStatus) {
   }
 
   return 'This room is not accepting votes.';
-}
-
-function getInitials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join('')
-    .toUpperCase();
-}
-
-function getAvatarTone(index: number) {
-  const tones = ['orange', 'blue', 'green', 'lavender', 'yellow', 'red'] as const;
-
-  return tones[index % tones.length];
 }
 
 function createLobbyError(message: string): LobbyError {
@@ -587,7 +572,6 @@ export default function RoomRoute() {
             {participants.map((participant, index) => (
               <View key={participant.id} style={styles.participantRow}>
                 <Avatar
-                  initials={getInitials(participant.display_name)}
                   name={participant.display_name}
                   size="sm"
                   tone={getAvatarTone(index)}

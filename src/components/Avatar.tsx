@@ -2,10 +2,10 @@
 import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 
 import { theme, type ThemeColor } from '../constants/theme';
+import { getAvatarInitials, type AvatarTone } from '../utils/avatar';
 import { Text } from './Text';
 
 type AvatarSize = 'sm' | 'md' | 'lg' | 'xl';
-type AvatarTone = 'red' | 'orange' | 'green' | 'blue' | 'lavender' | 'yellow' | 'navy';
 
 type AvatarProps = {
   accessibilityLabel?: string;
@@ -32,24 +32,6 @@ const toneColors: Record<AvatarTone, ThemeColor> = {
   red: 'rouletteRed',
   yellow: 'nachoYellow',
 };
-
-function getInitials(name?: string, initials?: string) {
-  if (initials) {
-    return initials.slice(0, 2).toUpperCase();
-  }
-
-  if (!name) {
-    return '?';
-  }
-
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join('')
-    .toUpperCase();
-}
 
 export function Avatar({
   accessibilityLabel,
@@ -80,7 +62,7 @@ export function Avatar({
         <Image source={source} style={[styles.image, { borderRadius: dimension / 2 }]} />
       ) : (
         <Text color={tone === 'navy' ? 'textInverse' : 'afterpartyNavy'} variant="label">
-          {getInitials(name, initials)}
+          {getAvatarInitials(name, initials)}
         </Text>
       )}
     </View>
