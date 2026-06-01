@@ -1,4 +1,5 @@
 import type { RoomStatus } from '../types/domain';
+import { parseTimestamp, sortByTimestampDesc } from './dateUtils';
 
 export type RecentRoom = {
   id: string;
@@ -41,7 +42,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isValidTimestamp(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && Number.isFinite(Date.parse(value));
+  return typeof value === 'string' && parseTimestamp(value) !== undefined;
 }
 
 function normalizeOptionalItineraryId(value: unknown) {
@@ -73,7 +74,7 @@ export function parseRecentRoom(value: unknown): RecentRoom | undefined {
 }
 
 export function sortRecentRooms(rooms: readonly RecentRoom[]) {
-  return [...rooms].sort((left, right) => Date.parse(right.lastOpenedAt) - Date.parse(left.lastOpenedAt));
+  return sortByTimestampDesc(rooms, (room) => room.lastOpenedAt);
 }
 
 export function normalizeRecentRooms(value: unknown, limit = maxRecentRooms) {

@@ -8,6 +8,7 @@ import { Button, Card, Chip, ErrorState, LoadingState, Screen, Text } from '../.
 import { theme } from '../../constants/theme';
 import { useAuth } from '../../features/auth/AuthProvider';
 import { trackAnalyticsEvent } from '../../lib/analytics';
+import { formatDateTime } from '../../lib/dateUtils';
 import { getFriendlyRemoteError } from '../../lib/remoteErrors';
 import { supabase } from '../../lib/supabase';
 import { toDisplayLabel } from '../../utils/displayLabels';
@@ -294,19 +295,6 @@ function getStatusTone(room: ResolvedRoom) {
   }
 
   return 'red';
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date);
 }
 
 function formatTimeWindow(room: ResolvedRoom) {

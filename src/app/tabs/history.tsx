@@ -6,9 +6,11 @@ import { StyleSheet, View } from 'react-native';
 import { Button, Card, Chip, EmptyState, ErrorState, LoadingState, Screen, Text } from '../../components';
 import { theme } from '../../constants/theme';
 import { useAuth } from '../../features/auth/AuthProvider';
+import { formatShortDate, sortByTimestampDesc } from '../../lib/dateUtils';
 import { getRecentRooms, getRoomHistoryDestination, isClosedRoomStatus, type RecentRoom } from '../../lib/recentRooms';
 import { supabase } from '../../lib/supabase';
 import type { RoomStatus } from '../../types/domain';
+import { toDisplayLabel } from '../../utils/displayLabels';
 
 type ParticipantRoomRow = {
   joined_at: string;
@@ -47,9 +49,7 @@ type HistoryError = {
 const closedStatuses: readonly RoomStatus[] = ['decided', 'itinerary_ready', 'completed', 'cancelled', 'expired'];
 
 function toLabel(value: string) {
-  return value
-    .replace(/[_-]/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return toDisplayLabel(value);
 }
 
 function getStatusTone(status: RoomStatus) {
@@ -76,22 +76,8 @@ function getStatusRailColor(status: RoomStatus) {
   return theme.colors.electricTangerine;
 }
 
-function formatDate(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return 'Recently';
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(date);
-}
-
 function sortHistoryItems(items: readonly HistoryRoomItem[]) {
-  return [...items].sort((left, right) => Date.parse(right.lastTouchedAt) - Date.parse(left.lastTouchedAt));
+  return sortByTimestampDesc(items, (item) => item.lastTouchedAt);
 }
 
 function toLocalHistoryItem(room: RecentRoom): HistoryRoomItem {
@@ -267,7 +253,7 @@ export default function HistoryRoute() {
                     <View style={styles.roomTitleGroup}>
                       <Text variant="bodyStrong">{room.title}</Text>
                       <Text color="textSecondary" variant="caption">
-                        {room.savedAt ? `Saved ${formatDate(room.savedAt)}` : `Closed ${formatDate(room.lastTouchedAt)}`}
+                        {room.savedAt ? `Saved ${formatShortDate(room.savedAt)}` : `Closed ${formatShortDate(room.lastTouchedAt)}`}
                       </Text>
                     </View>
                     <Chip title={toLabel(room.status)} tone={getStatusTone(room.status)} />

@@ -6,9 +6,11 @@ import { StyleSheet, View } from 'react-native';
 import { Button, Card, Chip, EmptyState, ErrorState, LoadingState, Screen, Text } from '../../components';
 import { theme } from '../../constants/theme';
 import { useAuth } from '../../features/auth/AuthProvider';
+import { formatRelativeDate, sortByTimestampDesc } from '../../lib/dateUtils';
 import { getRecentRooms, isActiveRoomStatus, type RecentRoom } from '../../lib/recentRooms';
 import { supabase } from '../../lib/supabase';
 import type { ParticipantRole, RoomStatus } from '../../types/domain';
+import { toDisplayLabel } from '../../utils/displayLabels';
 
 type ParticipantRoomRow = {
   joined_at: string;
@@ -41,9 +43,7 @@ type HomeError = {
 const activeStatuses: readonly RoomStatus[] = ['draft', 'inviting', 'voting', 'deciding'];
 
 function toLabel(value: string) {
-  return value
-    .replace(/[_-]/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return toDisplayLabel(value);
 }
 
 function getStatusTone(status: RoomStatus) {
@@ -70,34 +70,6 @@ function getStatusRailColor(status: RoomStatus) {
   return theme.colors.poolBlue;
 }
 
-function formatRelativeDate(value: string) {
-  const timestamp = Date.parse(value);
-
-  if (Number.isNaN(timestamp)) {
-    return 'Recently updated';
-  }
-
-  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
-
-  if (elapsedMinutes < 1) {
-    return 'Updated just now';
-  }
-
-  if (elapsedMinutes < 60) {
-    return `Updated ${elapsedMinutes} min ago`;
-  }
-
-  const elapsedHours = Math.floor(elapsedMinutes / 60);
-
-  if (elapsedHours < 24) {
-    return `Updated ${elapsedHours} hr ago`;
-  }
-
-  const elapsedDays = Math.floor(elapsedHours / 24);
-
-  return `Updated ${elapsedDays} day${elapsedDays === 1 ? '' : 's'} ago`;
-}
-
 function toActiveRoomItem(room: RoomRow, participant?: ParticipantRoomRow): ActiveRoomItem {
   return {
     id: room.id,
@@ -118,7 +90,7 @@ function toLocalActiveRoom(room: RecentRoom): ActiveRoomItem {
 }
 
 function sortActiveRooms(rooms: readonly ActiveRoomItem[]) {
-  return [...rooms].sort((left, right) => Date.parse(right.lastTouchedAt) - Date.parse(left.lastTouchedAt));
+  return sortByTimestampDesc(rooms, (room) => room.lastTouchedAt);
 }
 
 export default function HomeRoute() {
