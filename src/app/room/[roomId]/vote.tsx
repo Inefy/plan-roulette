@@ -11,6 +11,15 @@ import { PlanOptionCard } from '../../../features/plan/components';
 import { trackAnalyticsEvent } from '../../../lib/analytics';
 import { getFriendlyRemoteError } from '../../../lib/remoteErrors';
 import { supabase } from '../../../lib/supabase';
+import {
+  buildVotesByOptionId,
+  createOptimisticVote,
+  getAnsweredCount,
+  getFirstUnvotedIndex,
+  getNextIndex,
+  replaceVote,
+  rollbackOptimisticVote,
+} from '../../../lib/voteStateUtils';
 import type { BudgetTier, DecisionMode, EnergyLevel, LocationMode, ParticipantRole, PlanCategory, RoomStatus, VoteValue } from '../../../types/domain';
 import { toDisplayLabel } from '../../../utils/displayLabels';
 
@@ -134,33 +143,6 @@ function createVoteError(message: string): VoteScreenError {
   };
 }
 
-function buildVotesByOptionId(votes: readonly VoteRow[]) {
-  return votes.reduce<Record<string, VoteRow>>((accumulator, vote) => {
-    accumulator[vote.option_id] = vote;
-    return accumulator;
-  }, {});
-}
-
-function getAnsweredCount(options: readonly OptionRow[], votesByOptionId: Record<string, VoteRow>) {
-  return options.filter((option) => Boolean(votesByOptionId[option.id])).length;
-}
-
-function getFirstUnvotedIndex(options: readonly OptionRow[], votesByOptionId: Record<string, VoteRow>) {
-  return options.findIndex((option) => !votesByOptionId[option.id]);
-}
-
-function getNextIndex(options: readonly OptionRow[], votesByOptionId: Record<string, VoteRow>, currentIndex: number) {
-  const afterCurrentIndex = options.findIndex((option, index) => index > currentIndex && !votesByOptionId[option.id]);
-
-  if (afterCurrentIndex !== -1) {
-    return afterCurrentIndex;
-  }
-
-  const firstUnvotedIndex = getFirstUnvotedIndex(options, votesByOptionId);
-
-  return firstUnvotedIndex === -1 ? currentIndex : firstUnvotedIndex;
-}
-
 function formatOptionMeta(option: OptionRow) {
   const duration =
     option.min_duration_minutes && option.max_duration_minutes
@@ -169,27 +151,6 @@ function formatOptionMeta(option: OptionRow) {
 
   return [duration, toLabel(option.budget_tier), toLabel(option.energy_level), toLabel(option.location_mode)].join(' | ');
 }
-
-function createOptimisticVote(optionId: string, participantId: string, roomId: string, value: VoteValue): VoteRow {
-  const timestamp = new Date().toISOString();
-
-  return {
-    created_at: timestamp,
-    id: `optimistic-${optionId}`,
-    option_id: optionId,
-    participant_id: participantId,
-    updated_at: timestamp,
-    value,
-  };
-}
-
-function replaceVote(votesByOptionId: Record<string, VoteRow>, vote: VoteRow) {
-  return {
-    ...votesByOptionId,
-    [vote.option_id]: vote,
-  };
-}
-
 function VotingSkeleton() {
   return (
     <Screen contentContainerStyle={styles.screen} padded={false} scroll>
@@ -479,7 +440,10 @@ export default function RoomVoteRoute() {
       return;
     }
 
-    const optimisticVote = createOptimisticVote(option.id, screenData.currentParticipant.id, roomId, value);
+    const previousVote = screenData.votesByOptionId[option.id];
+    const previousReadyState = screenData.currentParticipant.is_ready;
+    const previousIndex = currentIndex;
+    const optimisticVote: VoteRow = createOptimisticVote(option.id, screenData.currentParticipant.id, value);
     const optimisticVotes = replaceVote(screenData.votesByOptionId, optimisticVote);
 
     setScreenData({
@@ -554,6 +518,29 @@ export default function RoomVoteRoute() {
         value,
       });
       setFeedbackMessage(friendlyError.message);
+      setScreenData((currentData) => {
+        if (!currentData || currentData.votesByOptionId[option.id]?.id !== optimisticVote.id) {
+          return currentData;
+        }
+
+        return {
+          ...currentData,
+          currentParticipant: {
+            ...currentData.currentParticipant,
+            is_ready: previousReadyState,
+          },
+          votesByOptionId: rollbackOptimisticVote(currentData.votesByOptionId, option.id, optimisticVote.id, previousVote),
+        };
+      });
+
+      if (shouldAdvance) {
+        setHistory((currentHistory) => {
+          const lastHistoryIndex = currentHistory[currentHistory.length - 1];
+
+          return lastHistoryIndex === previousIndex ? currentHistory.slice(0, -1) : currentHistory;
+        });
+        setCurrentIndex(previousIndex);
+      }
     } finally {
       setIsSavingVote(false);
     }
