@@ -14,7 +14,8 @@ import { getFriendlyRemoteError } from '../../../lib/remoteErrors';
 import { finalizeRoomResult, RoomFinalizationError } from '../../../lib/roomFinalizer';
 import { supabase } from '../../../lib/supabase';
 import type { BudgetTier, DecisionMode, ParticipantRole, PlanCategory, RoomStatus } from '../../../types/domain';
-import { getAvatarTone } from '../../../utils/avatar';
+import { getAvatarImageSource, getAvatarTone } from '../../../utils/avatar';
+import { toDisplayLabel } from '../../../utils/displayLabels';
 
 type RoomRouteParams = {
   roomId?: string | string[];
@@ -60,9 +61,7 @@ function getParamValue(value: string | string[] | undefined) {
 }
 
 function toLabel(value: string) {
-  return value
-    .replace(/[_-]/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return toDisplayLabel(value);
 }
 
 function isVotingClosed(status: RoomStatus) {
@@ -574,6 +573,7 @@ export default function RoomRoute() {
                 <Avatar
                   name={participant.display_name}
                   size="sm"
+                  source={getAvatarImageSource(participant.avatar_url)}
                   tone={getAvatarTone(index)}
                 />
                 <View style={styles.participantText}>

@@ -19,7 +19,7 @@ import { rememberRecentRoom } from '../../../lib/recentRooms';
 import { getFriendlyRemoteError } from '../../../lib/remoteErrors';
 import { supabase } from '../../../lib/supabase';
 import type { BudgetTier, DecisionMode, ParticipantRole, PlanCategory, RoomStatus, VoteValue } from '../../../types/domain';
-import { getAvatarTone } from '../../../utils/avatar';
+import { getAvatarImageSource, getAvatarTone } from '../../../utils/avatar';
 
 type ItineraryRouteParams = {
   roomId?: string | string[];
@@ -165,6 +165,7 @@ function SupportList({
           <Avatar
             name={participant.display_name}
             size="sm"
+            source={getAvatarImageSource(participant.avatar_url)}
             tone={getAvatarTone(index)}
           />
           <Text style={styles.supportName} variant="bodyStrong">

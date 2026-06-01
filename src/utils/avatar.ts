@@ -34,3 +34,15 @@ export function getAvatarTone(index: number): AvatarTone {
 
   return avatarTones[normalizedIndex];
 }
+
+export function getAvatarImageSource(avatarUrl: string | null | undefined) {
+  const normalizedAvatarUrl = avatarUrl?.trim();
+
+  if (!normalizedAvatarUrl || !/^https?:\/\//i.test(normalizedAvatarUrl)) {
+    return undefined;
+  }
+
+  return {
+    uri: normalizedAvatarUrl,
+  };
+}
