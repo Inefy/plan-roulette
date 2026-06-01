@@ -40,7 +40,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/lib/planGenerator.test.ts src/lib/consensusEngine.test.ts src/lib/itineraryBuilder.test.ts src/lib/linkBuilder.test.ts src/features/create/CreatePlanProvider.test.ts"
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "private": true
 }

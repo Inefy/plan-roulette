@@ -2,18 +2,10 @@
 import { Platform } from 'react-native';
 import type * as ExpoCalendar from 'expo-calendar';
 
-type CalendarModule = typeof ExpoCalendar;
+import { buildCalendarEventNotes } from './calendarUtils';
+import type { CalendarPlanInput } from './calendarUtils';
 
-export type CalendarPlanInput = {
-  backupPlan: string;
-  budget: string;
-  endDate: Date;
-  locationText: string;
-  planTitle: string;
-  shareLink: string;
-  startDate: Date;
-  steps: readonly string[];
-};
+type CalendarModule = typeof ExpoCalendar;
 
 export type AddPlanToCalendarStatus = 'canceled' | 'created' | 'permission_denied' | 'unavailable';
 
@@ -22,41 +14,13 @@ export type AddPlanToCalendarResult = {
   status: AddPlanToCalendarStatus;
 };
 
-const defaultDurationMinutes = 90;
-
-function isValidDate(value: Date) {
-  return !Number.isNaN(value.getTime());
-}
-
-function addMinutes(date: Date, minutes: number) {
-  return new Date(date.getTime() + minutes * 60000);
-}
-
-function getRoundedNextHour() {
-  const now = new Date();
-  const nextHour = new Date(now);
-
-  nextHour.setHours(now.getHours() + 1, 0, 0, 0);
-
-  return nextHour;
-}
-
-function parseDurationMinutes(durationText: string) {
-  const durations = [...durationText.matchAll(/(?:(\d+)\s*hr)?\s*(?:(\d+)\s*min)?/g)]
-    .map((match) => {
-      const hours = Number(match[1] ?? 0);
-      const minutes = Number(match[2] ?? 0);
-
-      return hours * 60 + minutes;
-    })
-    .filter((value) => Number.isFinite(value) && value > 0);
-
-  if (durations.length === 0) {
-    return defaultDurationMinutes;
-  }
-
-  return Math.max(...durations);
-}
+export {
+  buildCalendarEventNotes,
+  formatCalendarDateInput,
+  getDefaultCalendarDateRange,
+  parseCalendarDateInput,
+} from './calendarUtils';
+export type { CalendarPlanInput } from './calendarUtils';
 
 function isPermissionGranted(permission: { granted?: boolean; status?: string }) {
   return permission.granted === true || permission.status === 'granted';
@@ -83,47 +47,6 @@ async function getWritableCalendar(Calendar: CalendarModule) {
     calendars.find((calendar) => calendar.allowsModifications && calendar.isPrimary) ??
     calendars.find((calendar) => calendar.allowsModifications)
   );
-}
-
-export function getDefaultCalendarDateRange(meetingTime: string, estimatedDuration: string) {
-  const parsedStartDate = new Date(meetingTime);
-  const startDate = isValidDate(parsedStartDate) ? parsedStartDate : getRoundedNextHour();
-  const endDate = addMinutes(startDate, parseDurationMinutes(estimatedDuration));
-
-  return {
-    endDate,
-    startDate,
-  };
-}
-
-export function formatCalendarDateInput(date: Date) {
-  const timezoneOffsetMs = date.getTimezoneOffset() * 60000;
-  const localDate = new Date(date.getTime() - timezoneOffsetMs);
-
-  return localDate.toISOString().slice(0, 16);
-}
-
-export function parseCalendarDateInput(value: string) {
-  const date = new Date(value.trim());
-
-  return isValidDate(date) ? date : undefined;
-}
-
-export function buildCalendarEventNotes(input: CalendarPlanInput) {
-  const steps = input.steps.map((step, index) => `${index + 1}. ${step}`).join('\n');
-
-  return [
-    'Plan Roulette final plan',
-    '',
-    'Steps',
-    steps || 'No steps listed.',
-    '',
-    `Budget: ${input.budget}`,
-    '',
-    `Backup plan: ${input.backupPlan}`,
-    '',
-    `Share link: ${input.shareLink}`,
-  ].join('\n');
 }
 
 export async function addPlanToCalendar(input: CalendarPlanInput): Promise<AddPlanToCalendarResult> {
