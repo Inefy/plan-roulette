@@ -23,14 +23,23 @@ test('builds invite share message', () => {
 
 test('parses invite tokens from production links', () => {
   assert.equal(parseInviteTokenFromLink('https://planroulette.app/join/abc%20123'), 'abc 123');
+  assert.equal(parseInviteTokenFromLink('https://www.planroulette.app/join/abc123'), 'abc123');
 });
 
 test('parses invite tokens from development links', () => {
   assert.equal(parseInviteTokenFromLink('planroulette://join/dev-token'), 'dev-token');
+  assert.equal(parseInviteTokenFromLink('planroulette:///join/dev-token'), 'dev-token');
 });
 
 test('returns undefined for links without invite tokens', () => {
   assert.equal(parseInviteTokenFromLink('https://planroulette.app/room/abc123'), undefined);
   assert.equal(parseInviteTokenFromLink('planroulette://join'), undefined);
   assert.equal(parseInviteTokenFromLink('not a link'), undefined);
+});
+
+test('returns undefined for malformed or blank invite tokens', () => {
+  assert.equal(parseInviteTokenFromLink('https://planroulette.app/join/%E0%A4%A'), undefined);
+  assert.equal(parseInviteTokenFromLink('planroulette://join/%E0%A4%A'), undefined);
+  assert.equal(parseInviteTokenFromLink('https://planroulette.app/join/%20'), undefined);
+  assert.equal(parseInviteTokenFromLink('planroulette://join/%20'), undefined);
 });
