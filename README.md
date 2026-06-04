@@ -68,6 +68,21 @@ npx eas build --profile production --platform all
 
 Set the required Expo public Supabase variables for local shells and EAS build environments. Do not set or store Supabase service role keys for this client app.
 
+## Production Mobile Launch
+
+The app is configured for iOS universal links and Android App Links on `planroulette.app` invite URLs. Before submitting production builds, complete the account, store, and domain verification checklist in `docs/mobile-launch-readiness.md`.
+
+Production release commands:
+
+```bash
+npm test
+npm run typecheck
+npx expo install --check
+npx expo-doctor
+npx eas-cli@latest build --profile production --platform all
+npx eas-cli@latest submit --profile production --platform all
+```
+
 ## Project Structure
 
 ```text

@@ -2,6 +2,7 @@
   "expo": {
     "name": "Plan Roulette",
     "slug": "plan-roulette",
+    "description": "Create a room, invite your group, vote on plans, and turn the winning choice into a shareable itinerary.",
     "scheme": "planroulette",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,7 +10,14 @@
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "app.planroulette.mobile",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "associatedDomains": [
+        "applinks:planroulette.app",
+        "applinks:www.planroulette.app"
+      ],
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +27,33 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "app.planroulette.mobile",
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "planroulette.app",
+              "pathPrefix": "/join"
+            },
+            {
+              "scheme": "https",
+              "host": "www.planroulette.app",
+              "pathPrefix": "/join"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
+      "permissions": [
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -39,9 +73,17 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "Allow Plan Roulette to access your calendar so it can add final plans."
+          "calendarPermission": "Allow Plan Roulette to access your calendar so it can add final plans.",
+          "remindersPermission": false
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "adda1f5a-7d72-4f22-9d2b-80b3313da437"
+      }
+    },
+    "owner": "zacbatten"
   }
 }
